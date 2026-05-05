@@ -23,6 +23,8 @@ public class WardenWinchSystem : MonoBehaviour
     [Header("碰撞／判定")]
     [Tooltip("僅與 Ground、Wall 等可勾層碰撞")]
     [SerializeField] private LayerMask grappleLayers;
+    [Tooltip("可勾住且連線期間允許玩家身體穿越的層（例如 GrappleOnly）。")]
+    [SerializeField] private LayerMask grapplePassthroughLayers;
 
     [Tooltip("用於偵測是否在空中（空氣中才套用 WASD 視角加速）")]
     [SerializeField] private LayerMask groundCheckLayers;
@@ -118,6 +120,11 @@ public class WardenWinchSystem : MonoBehaviour
     [Tooltip("鋼索成功發射並建立連線後觸發（可綁定音效／特效等）")]
     [SerializeField] private UnityEvent onGrappleLaunched = new UnityEvent();
 
+    [Header("怪物攻擊")]
+    [SerializeField] private float baseGrappleDamage = 20f;
+    [Tooltip("速度越快傷害越高的倍率")]
+    [SerializeField] private float speedDamageMultiplier = 1f;
+
     [Header("繩索材質效果（連線中）")]
     [Tooltip("鋼索錨在岩漿表面時，每秒基準傷害（會乘上 FixedUpdate 步長後傳給下方事件）。")]
     [SerializeField] private float lavaGrappleDamagePerSecond = 8f;
@@ -138,6 +145,7 @@ public class WardenWinchSystem : MonoBehaviour
     private GameObject _anchorObject;
     private float _currentRopeLength;
     private bool _connected;
+    private bool _skipSurfacePenetrationResolve;
     private Collider[] _playerColliders;
     private Collider[] _ignoredSurfaceColliders;
     private Collider[] _grappledSurfaceColliders;
@@ -198,7 +206,7 @@ public class WardenWinchSystem : MonoBehaviour
         if (_connected && Input.GetMouseButton(0))
             ApplyReelInAcceleration();
 
-        if (_connected)
+        if (_connected && !_skipSurfacePenetrationResolve)
             ResolveGrappledSurfacePenetration();
 
         ApplyAirMovement();
@@ -232,7 +240,7 @@ public class WardenWinchSystem : MonoBehaviour
             DisconnectGrapple();
     }
 
-    /// <summary>左鍵按下時嘗試發射：Camera 中心 Raycast、距離與材質檢查通過後建立錨點與 Joint。</summary>
+    /// <summary>左鍵按下時嘗試發射：命中怪物則造成傷害；命中可勾表面才建立錨點與 Joint。</summary>
     private void TryFireGrapple()
     {
         if (playerCamera == null || winchExitPoint == null)
@@ -240,8 +248,37 @@ public class WardenWinchSystem : MonoBehaviour
 
         // 自視野中心發射，最大距離即初始繩長上限。Ignore Trigger：不命中 Is Trigger 碰撞器，避免風扇等障礙誤擋鋼索。
         Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        if (!Physics.Raycast(ray, out RaycastHit hit, maxRopeLength, grappleLayers, QueryTriggerInteraction.Ignore))
+        // 使用 RaycastAll 取得最近命中；GrappleOnly 這類目標可被勾住，穿透效果於連線後處理。
+        RaycastHit[] allHits = Physics.RaycastAll(ray, maxRopeLength, grappleLayers, QueryTriggerInteraction.Ignore);
+        RaycastHit hit = default;
+        float nearest = float.MaxValue;
+        bool foundValidHit = false;
+        for (int i = 0; i < allHits.Length; i++)
+        {
+            RaycastHit candidate = allHits[i];
+            if (candidate.distance < nearest)
+            {
+                hit = candidate;
+                nearest = candidate.distance;
+                foundValidHit = true;
+            }
+        }
+
+        if (!foundValidHit)
             return;
+
+        // 命中怪物時改為攻擊，不建立勾索連線。
+        MonsterBase monster = hit.collider.GetComponentInParent<MonsterBase>();
+        if (monster != null && !monster.IsDead)
+        {
+            float speed = _rb.linearVelocity.magnitude;
+            float damage = baseGrappleDamage + speed * speedDamageMultiplier;
+            Vector3 hitDirection = ray.direction;
+            monster.TakeDamage(damage, hitDirection);
+            // 命中怪物也播放鋼索音效回饋。
+            onGrappleLaunched?.Invoke();
+            return;
+        }
 
         // 須有 PlatformType；水泥／岩漿／冰皆可勾（其餘材質不建立連線）。
         PlatformType platform = hit.collider.GetComponentInParent<PlatformType>();
@@ -256,8 +293,13 @@ public class WardenWinchSystem : MonoBehaviour
         if (Vector3.Distance(playerPos, anchorWorld) < minAttachDistanceFromPlayer)
             return;
 
-        CacheGrappledSurfaceColliders(hit.collider);
-        BeginIgnoreGrappleCollider(hit.collider);
+        bool allowBodyPassthrough = IsLayerInMask(hit.collider.gameObject.layer, grapplePassthroughLayers);
+        _skipSurfacePenetrationResolve = allowBodyPassthrough;
+        if (allowBodyPassthrough)
+            _grappledSurfaceColliders = null;
+        else
+            CacheGrappledSurfaceColliders(hit.collider);
+        BeginIgnoreGrappleCollider(hit.collider, allowBodyPassthrough);
 
         float ropeLen = Vector3.Distance(winchExitPoint.position, anchorWorld);
         ropeLen = Mathf.Clamp(ropeLen, minRopeLength, maxRopeLength);
@@ -279,6 +321,11 @@ public class WardenWinchSystem : MonoBehaviour
     private static bool IsGrappleAllowedOn(MaterialType type)
     {
         return type == MaterialType.Concrete || type == MaterialType.Lava || type == MaterialType.Ice;
+    }
+
+    private static bool IsLayerInMask(int layer, LayerMask mask)
+    {
+        return (mask.value & (1 << layer)) != 0;
     }
 
     /// <summary>在擊中點建立空物件作為錨點（視覺與邏輯參考）；可選掛在命中表面下以利碎裂平台等邏輯。</summary>
@@ -356,6 +403,7 @@ public class WardenWinchSystem : MonoBehaviour
         }
 
         _connected = false;
+        _skipSurfacePenetrationResolve = false;
         _grappleSurfaceMaterial = MaterialType.Concrete;
         _grappledSurfaceColliders = null;
 
@@ -499,9 +547,9 @@ public class WardenWinchSystem : MonoBehaviour
             _rb.linearVelocity = v + correctionDir * inwardSpeed;
     }
 
-    private void BeginIgnoreGrappleCollider(Collider hitCollider)
+    private void BeginIgnoreGrappleCollider(Collider hitCollider, bool forceIgnore)
     {
-        if (!ignoreCollisionWithGrappledCollider || hitCollider == null || _playerColliders == null)
+        if ((!ignoreCollisionWithGrappledCollider && !forceIgnore) || hitCollider == null || _playerColliders == null)
             return;
 
         EndIgnoreGrappleCollider();
@@ -704,6 +752,8 @@ public class WardenWinchSystem : MonoBehaviour
         reelInAcceleration = Mathf.Max(0f, reelInAcceleration);
         reelInMaxSpeed = Mathf.Max(0f, reelInMaxSpeed);
         radialVelocityRetentionOnRelease = Mathf.Clamp01(radialVelocityRetentionOnRelease);
+        baseGrappleDamage = Mathf.Max(0f, baseGrappleDamage);
+        speedDamageMultiplier = Mathf.Max(0f, speedDamageMultiplier);
         lavaGrappleDamagePerSecond = Mathf.Max(0f, lavaGrappleDamagePerSecond);
         iceGrappleHorizontalSlowdownPerSecond = Mathf.Max(0f, iceGrappleHorizontalSlowdownPerSecond);
     }
