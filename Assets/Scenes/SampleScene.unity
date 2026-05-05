@@ -438,6 +438,7 @@ MonoBehaviour:
   spawnMargin: 2
   maxSpawnPositionAttempts: 24
   spawnDistancePadding: 0.5
+  spawnInterval: 2
   wavePrepTime: 3
   monsterCheckInterval: 0.5
   waves:
@@ -6615,7 +6616,7 @@ MonoBehaviour:
   meleeKnockback: 10
   meleeCooldown: 0.3
   meleeEffectPrefab: {fileID: 5479877900202811358, guid: 28d091f2c21b13442b00ab8158104ff2, type: 3}
-  meleeEffectDuration: 0.2
+  meleeEffectDuration: 2
   attackCooldownRemaining: 0
   cooldownDebugLogInterval: 0.25
   meleeHitLayers:

@@ -7,8 +7,8 @@ using UnityEngine.Events;
 /// 波次管理器：
 /// - 依序執行 Inspector 設定的固定波次
 /// - 每波開始前倒數
-/// - 生成該波怪物
-/// - 等待怪物全滅後觸發波次完成事件
+/// - 以打亂後的佇列依固定間隔逐隻生成怪物，間隔可全域或依波覆寫
+/// - 佇列清空後等待場上怪物全滅，觸發波次完成事件
 /// - 等待外部呼叫 ResumeNextWave() 後進入下一波
 /// </summary>
 public class WaveManager : MonoBehaviour
@@ -21,8 +21,9 @@ public class WaveManager : MonoBehaviour
         public int turretCount;
         public int airVentCount;
         public int laserPillarCount;
-        [Tooltip("怪物生成間隔（秒）")]
-        public float spawnInterval = 0.5f;
+
+        [Tooltip("該波怪物生成間隔（秒）；若為 0 則使用 WaveManager 的全域 spawnInterval")]
+        public float spawnInterval = 2f;
     }
 
     [Header("怪物 Prefab")]
@@ -38,6 +39,11 @@ public class WaveManager : MonoBehaviour
     [SerializeField] private float spawnMargin = 2f;
     [SerializeField] private int maxSpawnPositionAttempts = 24;
     [SerializeField] private float spawnDistancePadding = 0.5f;
+
+    [Header("生成節奏")]
+    [Tooltip("預設生成間隔（秒）；單一波次 WaveData.spawnInterval 為 0 時採用此值")]
+    [SerializeField]
+    private float spawnInterval = 2f;
 
     [Header("波次設定")]
     [SerializeField] private float wavePrepTime = 3f;
@@ -136,30 +142,58 @@ public class WaveManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 建立打亂後的生成佇列（Prefab 參照），依固定間隔逐隻生成直到佇列清空。
+    /// </summary>
     private IEnumerator SpawnWaveMonsters(WaveData wave)
     {
         if (wave == null)
             yield break;
 
-        float interval = Mathf.Max(0f, wave.spawnInterval);
+        float interval = wave.spawnInterval > 0f ? wave.spawnInterval : spawnInterval;
+        interval = Mathf.Max(0.01f, interval);
 
-        yield return SpawnMany(electricBallPrefab, wave.electricBallCount, interval);
-        yield return SpawnMany(turretPrefab, wave.turretCount, interval);
-        yield return SpawnMany(airVentPrefab, wave.airVentCount, interval);
-        yield return SpawnMany(laserPillarPrefab, wave.laserPillarCount, interval);
+        List<GameObject> spawnQueue = BuildShuffledSpawnQueue(wave);
+
+        while (spawnQueue.Count > 0)
+        {
+            CleanupDeadMonsters();
+
+            GameObject prefab = spawnQueue[0];
+            spawnQueue.RemoveAt(0);
+            SpawnSingle(prefab);
+
+            yield return new WaitForSeconds(interval);
+        }
     }
 
-    private IEnumerator SpawnMany(GameObject prefab, int count, float interval)
+    /// <summary>
+    /// 將該波所有要生成的怪物（電球、砲台、氣流、雷射柱）依數量展開後 Fisher–Yates 打亂。
+    /// </summary>
+    private List<GameObject> BuildShuffledSpawnQueue(WaveData wave)
+    {
+        var queue = new List<GameObject>();
+        EnqueuePrefab(queue, electricBallPrefab, wave.electricBallCount);
+        EnqueuePrefab(queue, turretPrefab, wave.turretCount);
+        EnqueuePrefab(queue, airVentPrefab, wave.airVentCount);
+        EnqueuePrefab(queue, laserPillarPrefab, wave.laserPillarCount);
+
+        for (int i = queue.Count - 1; i > 0; i--)
+        {
+            int j = UnityEngine.Random.Range(0, i + 1);
+            (queue[i], queue[j]) = (queue[j], queue[i]);
+        }
+
+        return queue;
+    }
+
+    private static void EnqueuePrefab(List<GameObject> queue, GameObject prefab, int count)
     {
         if (prefab == null || count <= 0)
-            yield break;
+            return;
 
         for (int i = 0; i < count; i++)
-        {
-            SpawnSingle(prefab);
-            if (interval > 0f && i < count - 1)
-                yield return new WaitForSeconds(interval);
-        }
+            queue.Add(prefab);
     }
 
     private void SpawnSingle(GameObject prefab)
@@ -299,6 +333,7 @@ public class WaveManager : MonoBehaviour
         return maxRadius;
     }
 
+    /// <summary>等待 <see cref="_activeMonsters"/> 全滅（生成佇列已由 <see cref="SpawnWaveMonsters"/> 清空）。</summary>
     private IEnumerator WaitUntilWaveCleared()
     {
         float interval = Mathf.Max(0.05f, monsterCheckInterval);
@@ -378,6 +413,7 @@ public class WaveManager : MonoBehaviour
         spawnMargin = Mathf.Max(0f, spawnMargin);
         maxSpawnPositionAttempts = Mathf.Max(1, maxSpawnPositionAttempts);
         spawnDistancePadding = Mathf.Max(0f, spawnDistancePadding);
+        spawnInterval = Mathf.Max(0f, spawnInterval);
         wavePrepTime = Mathf.Max(0f, wavePrepTime);
         monsterCheckInterval = Mathf.Max(0.05f, monsterCheckInterval);
 
