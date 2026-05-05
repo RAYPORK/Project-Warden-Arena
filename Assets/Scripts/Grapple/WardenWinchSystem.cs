@@ -68,9 +68,11 @@ public class WardenWinchSystem : MonoBehaviour
     [Tooltip("按住收繩時，沿繩方向最大速度（m/s）。達上限後停止額外推進，避免失控。0 表示不限制。")]
     [SerializeField] private float reelInMaxSpeed = 28f;
 
-    [Header("空中操控（未連鋼索時）")]
-    [Tooltip("僅在未連鋼索且判定為空中時，對 Rigidbody 施加的力道（連線時不套用，避免刻意擺盪）。")]
+    [Header("空中操控")]
+    [Tooltip("未連鋼索且判定為空中時，對 Rigidbody 施加的 WASD 力道。")]
     [SerializeField] private float airControlForce = 15f;
+    [Tooltip("連線勾索期間的 WASD 力道滑桿；設為 0 代表連線時不給空中操控。")]
+    [SerializeField] private float grappleAirControlForce = 8f;
 
     [Header("速度上限（可選，0 = 不限制）")]
     [Tooltip("大於 0 且判定為空中時，每個物理幀將「水平」線速度壓在此值（m/s），減輕擺盪／鋼索累積過大側向動能。")]
@@ -121,7 +123,6 @@ public class WardenWinchSystem : MonoBehaviour
     [SerializeField] private UnityEvent onGrappleLaunched = new UnityEvent();
 
     [Header("物理攻擊")]
-    [SerializeField] private float attackSpeedThreshold = 8f;
     [SerializeField] private float attackDamageMultiplier = 1f;
     [SerializeField] private float minAttackDamage = 10f;
     [SerializeField] private float bounceForce = 5f;
@@ -438,7 +439,7 @@ public class WardenWinchSystem : MonoBehaviour
         EndIgnoreGrappleCollider();
     }
 
-    /// <summary>撞擊怪物時造成傷害：若目前正勾著該怪物則忽略速度門檻；否則維持高速撞擊才生效。</summary>
+    /// <summary>撞擊怪物即造成傷害（不設速度下限）。</summary>
     private void OnCollisionEnter(Collision collision)
     {
         if (collision == null || collision.contactCount <= 0)
@@ -450,8 +451,6 @@ public class WardenWinchSystem : MonoBehaviour
 
         bool isRammingConnectedMonster = _connected && _connectedMonster == monster;
         float speed = isRammingConnectedMonster ? _rb.linearVelocity.magnitude : collision.relativeVelocity.magnitude;
-        if (!isRammingConnectedMonster && speed <= attackSpeedThreshold)
-            return;
 
         Vector3 hitDirection = collision.relativeVelocity.sqrMagnitude > 1e-8f
             ? collision.relativeVelocity.normalized
@@ -787,12 +786,9 @@ public class WardenWinchSystem : MonoBehaviour
         _rb.linearVelocity = v * (maxSpeedOnGrappleRelease / mag);
     }
 
-    /// <summary>未連鋼索且在空中時，依主攝影機 forward／right 將 WASD 轉成世界方向並 AddForce。</summary>
+    /// <summary>空中 WASD 操控：未連線與連線可用不同力道，皆依主攝影機方向施力。</summary>
     private void ApplyAirMovement()
     {
-        if (_connected)
-            return;
-
         if (!IsAirborne())
             return;
 
@@ -804,6 +800,10 @@ public class WardenWinchSystem : MonoBehaviour
         if (Mathf.Approximately(h, 0f) && Mathf.Approximately(v, 0f))
             return;
 
+        float controlForce = _connected ? grappleAirControlForce : airControlForce;
+        if (controlForce <= 0f)
+            return;
+
         Vector3 forward = playerCamera.transform.forward;
         forward.y = 0f;
         forward.Normalize();
@@ -813,7 +813,7 @@ public class WardenWinchSystem : MonoBehaviour
         right.Normalize();
 
         Vector3 wish = (forward * v + right * h).normalized;
-        _rb.AddForce(wish * airControlForce, ForceMode.Acceleration);
+        _rb.AddForce(wish * controlForce, ForceMode.Acceleration);
     }
 
     /// <summary>向下短射線未撞到地面層則視為空中；同樣忽略 Trigger，以免空中判定被觸發體誤判為著地。</summary>
@@ -854,6 +854,8 @@ public class WardenWinchSystem : MonoBehaviour
         minRopeLength = Mathf.Max(0.01f, minRopeLength);
         maxRopeLength = Mathf.Max(minRopeLength, maxRopeLength);
         minAttachDistanceFromPlayer = Mathf.Max(0f, minAttachDistanceFromPlayer);
+        airControlForce = Mathf.Max(0f, airControlForce);
+        grappleAirControlForce = Mathf.Max(0f, grappleAirControlForce);
         maxAirHorizontalSpeed = Mathf.Max(0f, maxAirHorizontalSpeed);
         maxSpeedOnGrappleRelease = Mathf.Max(0f, maxSpeedOnGrappleRelease);
         fullRetractRopeLengthTolerance = Mathf.Max(0f, fullRetractRopeLengthTolerance);
@@ -863,7 +865,6 @@ public class WardenWinchSystem : MonoBehaviour
         reelInAcceleration = Mathf.Max(0f, reelInAcceleration);
         reelInMaxSpeed = Mathf.Max(0f, reelInMaxSpeed);
         radialVelocityRetentionOnRelease = Mathf.Clamp01(radialVelocityRetentionOnRelease);
-        attackSpeedThreshold = Mathf.Max(0f, attackSpeedThreshold);
         attackDamageMultiplier = Mathf.Max(0f, attackDamageMultiplier);
         minAttackDamage = Mathf.Max(0f, minAttackDamage);
         bounceForce = Mathf.Max(0f, bounceForce);
