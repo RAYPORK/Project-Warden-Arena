@@ -9,6 +9,8 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class WardenController : MonoBehaviour
 {
+    private const float AwakeGroundSnapProbeHeight = 2f;
+    private const float AwakeGroundSnapProbeDistance = 200f;
     [Header("參照")]
     [Tooltip("第一人稱主攝影機（俯仰角施加於此 Transform）")]
     [SerializeField] private Camera mainCamera;
@@ -56,12 +58,20 @@ public class WardenController : MonoBehaviour
 
     [Tooltip("向下射線長度（公尺）")]
     [SerializeField] private float groundRayLength = 0.2f;
+    [Tooltip("腳底 SphereCast 半徑（比單線 Raycast 更不容易漏判著地）。")]
+    [SerializeField] private float groundProbeRadius = 0.25f;
 
     [Tooltip("腳底射線主要偵測的 Layer（通常含 Ground）")]
     [SerializeField] private LayerMask groundLayer;
 
     [Tooltip("若熔岩／冰塊平台不在 Ground Layer，請在此額外勾選其所在 Layer，否則會判定懸空而無法移動。")]
     [SerializeField] private LayerMask extraFootContactLayers;
+
+    [Header("跳躍容錯")]
+    [Tooltip("按下跳躍後可緩衝的秒數（提早按也能起跳）。")]
+    [SerializeField] private float jumpBufferSeconds = 0.12f;
+    [Tooltip("離地後仍可起跳的寬限秒數（coyote time）。")]
+    [SerializeField] private float coyoteTimeSeconds = 0.1f;
 
     [Header("視角")]
     [Tooltip("滑鼠靈敏度乘數")]
@@ -88,13 +98,15 @@ public class WardenController : MonoBehaviour
 
     /// <summary>腳底射線使用的完整遮罩（主 Ground + 額外可立足表面）。</summary>
     private int FootSurfaceMask => groundLayer.value | extraFootContactLayers.value;
+    private float _jumpBufferTimer;
+    private float _coyoteTimer;
 
     /// <summary>若未在 Inspector 指派血量管理器，於執行時尋找場景中的實例（Unity 6：FindFirstObjectByType）。</summary>
     private void EnsureHealthManagerReference()
     {
         if (healthManager != null)
             return;
-        healthManager = Object.FindFirstObjectByType<WardenHealthManager>();
+        healthManager = UnityEngine.Object.FindFirstObjectByType<WardenHealthManager>();
     }
 
     /// <summary>初始化 Rigidbody、鎖定游標，並快取攝影機初始俯仰。</summary>
@@ -103,6 +115,8 @@ public class WardenController : MonoBehaviour
         _rb = GetComponent<Rigidbody>();
         // 由程式控制旋轉，避免物理扭力與視角打架。
         _rb.freezeRotation = true;
+
+        TrySnapToGroundOnAwake();
 
         EnsureHealthManagerReference();
 
@@ -117,6 +131,35 @@ public class WardenController : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+    }
+
+    private void TrySnapToGroundOnAwake()
+    {
+        Vector3 desired = transform.position;
+        Vector3 origin = desired + Vector3.up * AwakeGroundSnapProbeHeight;
+        if (!Physics.SphereCast(
+                origin,
+                0.35f,
+                Vector3.down,
+                out RaycastHit hit,
+                AwakeGroundSnapProbeDistance,
+                ~0,
+                QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+
+        if (hit.collider != null && hit.collider.transform.IsChildOf(transform))
+            return;
+
+        float snappedY = hit.point.y + 1.0f;
+        if (Mathf.Abs(snappedY - desired.y) < 0.01f)
+            return;
+
+        transform.position = new Vector3(desired.x, snappedY, desired.z);
+        _rb.linearVelocity = Vector3.zero;
+        _rb.angularVelocity = Vector3.zero;
     }
 
     /// <summary>滑鼠視角在 Update 處理，與幀率無關的體感較穩定。</summary>
@@ -125,7 +168,8 @@ public class WardenController : MonoBehaviour
         ApplyMouseLook();
         if (WardenDevFlyMode.IsFlying)
             return;
-        TryJump();
+        if (Input.GetKeyDown(KeyCode.Space))
+            _jumpBufferTimer = jumpBufferSeconds;
     }
 
     /// <summary>地面移動使用固定時間步，與物理一致。</summary>
@@ -133,6 +177,15 @@ public class WardenController : MonoBehaviour
     {
         if (WardenDevFlyMode.IsFlying)
             return;
+        bool grounded = IsGrounded();
+        if (grounded)
+            _coyoteTimer = coyoteTimeSeconds;
+        else
+            _coyoteTimer = Mathf.Max(0f, _coyoteTimer - Time.fixedDeltaTime);
+
+        _jumpBufferTimer = Mathf.Max(0f, _jumpBufferTimer - Time.fixedDeltaTime);
+        TryConsumeBufferedJump();
+
         ApplyGroundMovement();
         ApplyGroundHorizontalBrakingWhenNoInput();
     }
@@ -241,19 +294,20 @@ public class WardenController : MonoBehaviour
         _rb.linearVelocity = new Vector3(horiz.x, vel.y, horiz.z);
     }
 
-    /// <summary>僅在地面且按下 Space 時對 Y 軸施加跳躍力（防止空中連跳）。</summary>
-    private void TryJump()
+    /// <summary>消耗跳躍緩衝與 coyote time，成功時起跳一次。</summary>
+    private void TryConsumeBufferedJump()
     {
-        if (!Input.GetKeyDown(KeyCode.Space))
+        if (_jumpBufferTimer <= 0f)
             return;
-
-        if (!IsGrounded())
+        if (_coyoteTimer <= 0f)
             return;
 
         Vector3 v = _rb.linearVelocity;
         v.y = 0f;
         _rb.linearVelocity = v;
         _rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+        _jumpBufferTimer = 0f;
+        _coyoteTimer = 0f;
     }
 
     /// <summary>自角色底部向下短射線；遮罩為 Ground + Extra，以便岩漿／冰與水泥同一套著地判定。</summary>
@@ -265,7 +319,77 @@ public class WardenController : MonoBehaviour
     private bool ProbeFoot(out RaycastHit hit)
     {
         Vector3 origin = transform.TransformPoint(groundRayLocalStart);
-        return Physics.Raycast(origin, Vector3.down, out hit, groundRayLength, FootSurfaceMask, QueryTriggerInteraction.Ignore);
+        bool didHit = Physics.SphereCast(
+            origin,
+            groundProbeRadius,
+            Vector3.down,
+            out hit,
+            groundRayLength,
+            FootSurfaceMask,
+            QueryTriggerInteraction.Ignore);
+        if (!didHit)
+        {
+            // Fallback：若地面層配置不一致，改用全層掃描，僅排除自身碰撞器。
+            bool fallbackHit = Physics.SphereCast(
+                origin,
+                groundProbeRadius,
+                Vector3.down,
+                out RaycastHit fallback,
+                groundRayLength,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+            bool fallbackIsSelfChild = fallbackHit && fallback.collider != null && fallback.collider.transform.IsChildOf(transform);
+            if (fallbackHit && fallback.collider != null && !fallback.collider.transform.IsChildOf(transform))
+            {
+                hit = fallback;
+                didHit = true;
+            }
+
+            if (!didHit)
+            {
+                float diagnosticLength = groundRayLength + 1.0f;
+                bool extendedHit = Physics.SphereCast(
+                    origin,
+                    groundProbeRadius,
+                    Vector3.down,
+                    out RaycastHit extended,
+                    diagnosticLength,
+                    ~0,
+                    QueryTriggerInteraction.Ignore);
+                bool extendedIsSelfChild = extendedHit && extended.collider != null && extended.collider.transform.IsChildOf(transform);
+
+                if (extendedHit && extended.collider != null && !extendedIsSelfChild)
+                {
+                    hit = extended;
+                    didHit = true;
+                }
+
+                if (!extendedHit)
+                {
+                    Collider[] overlaps = Physics.OverlapSphere(
+                        origin,
+                        groundProbeRadius + 0.02f,
+                        ~0,
+                        QueryTriggerInteraction.Ignore);
+                    bool overlapGrounded = false;
+                    for (int i = 0; i < overlaps.Length; i++)
+                    {
+                        Collider c = overlaps[i];
+                        if (c == null)
+                            continue;
+                        if (c.transform.IsChildOf(transform))
+                            continue;
+                        overlapGrounded = true;
+                        break;
+                    }
+                    if (overlapGrounded)
+                    {
+                        didHit = true;
+                    }
+                }
+            }
+        }
+        return didHit;
     }
 
     /// <summary>取得腳下平台材質；無命中或無 PlatformType 時視為水泥。</summary>
@@ -275,6 +399,12 @@ public class WardenController : MonoBehaviour
         {
             surface = MaterialType.Concrete;
             return false;
+        }
+
+        if (hit.collider == null)
+        {
+            surface = MaterialType.Concrete;
+            return true;
         }
 
         PlatformType platform = hit.collider.GetComponentInParent<PlatformType>();
@@ -287,7 +417,9 @@ public class WardenController : MonoBehaviour
     {
         Gizmos.color = Color.green;
         Vector3 origin = transform.TransformPoint(groundRayLocalStart);
+        Gizmos.DrawWireSphere(origin, groundProbeRadius);
         Gizmos.DrawLine(origin, origin + Vector3.down * groundRayLength);
+        Gizmos.DrawWireSphere(origin + Vector3.down * groundRayLength, groundProbeRadius);
     }
 
     private void OnValidate()
@@ -295,6 +427,10 @@ public class WardenController : MonoBehaviour
         lavaNoInputHorizontalBrakePerSecond = Mathf.Max(0f, lavaNoInputHorizontalBrakePerSecond);
         iceNoInputHorizontalBrakePerSecond = Mathf.Max(0f, iceNoInputHorizontalBrakePerSecond);
         concreteNoInputHorizontalBrakePerSecond = Mathf.Max(0f, concreteNoInputHorizontalBrakePerSecond);
+        jumpBufferSeconds = Mathf.Max(0f, jumpBufferSeconds);
+        coyoteTimeSeconds = Mathf.Max(0f, coyoteTimeSeconds);
+        groundProbeRadius = Mathf.Max(0.01f, groundProbeRadius);
+        groundRayLength = Mathf.Max(0.01f, groundRayLength);
     }
 #endif
 }

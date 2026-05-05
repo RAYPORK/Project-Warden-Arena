@@ -12,6 +12,15 @@ public class WardenDevFlyMode : MonoBehaviour
     /// <summary>其他腳本（移動／鋼索）據此略過一般地面移動邏輯。</summary>
     public static bool IsFlying { get; private set; }
 
+    /// <summary>
+    /// Play 進入或 Domain Reload 後重置靜態狀態，避免殘留 true 造成移動/跳躍被整段略過。
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticFlyState()
+    {
+        IsFlying = false;
+    }
+
     [Header("切換")]
     [Tooltip("按下此鍵切換飛行模式開／關（預設 F9）")]
     [SerializeField]
@@ -48,6 +57,10 @@ public class WardenDevFlyMode : MonoBehaviour
         _winch = GetComponent<WardenWinchSystem>();
         if (flyCamera == null)
             flyCamera = Camera.main;
+
+        // 若本元件尚未進入飛行模式，確保全域狀態為 false。
+        if (!_flyActive)
+            IsFlying = false;
     }
 
     private void OnDestroy()

@@ -9,6 +9,9 @@ using UnityEngine;
 [DefaultExecutionOrder(50)]
 public class WardenDeathManager : MonoBehaviour
 {
+    private const float RespawnGroundProbeHeight = 2f;
+    private const float RespawnGroundProbeDistance = 200f;
+
     [Header("核心參照")]
     [SerializeField] private WardenController playerController;
     [SerializeField] private WardenWinchSystem winchSystem;
@@ -60,6 +63,8 @@ public class WardenDeathManager : MonoBehaviour
     {
         if (useInitialPlayerPositionAsRespawn && playerRespawnRoot != null)
             respawnWorldPosition = playerRespawnRoot.position;
+
+        respawnWorldPosition = ResolveGroundedRespawnPosition(respawnWorldPosition);
 
         _sessionStartTime = Time.time;
 
@@ -244,7 +249,7 @@ public class WardenDeathManager : MonoBehaviour
 
         if (playerRespawnRoot != null)
         {
-            playerRespawnRoot.position = respawnWorldPosition;
+            playerRespawnRoot.position = ResolveGroundedRespawnPosition(respawnWorldPosition);
             if (playerRespawnRoot.TryGetComponent<Rigidbody>(out var rb) && !rb.isKinematic)
             {
                 rb.linearVelocity = Vector3.zero;
@@ -266,6 +271,27 @@ public class WardenDeathManager : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+    }
+
+    /// <summary>
+    /// 將重生點往下貼齊到最近地表，避免重生在半空導致一直判定未著地無法跳躍。
+    /// </summary>
+    private Vector3 ResolveGroundedRespawnPosition(Vector3 desiredPosition)
+    {
+        Vector3 castOrigin = desiredPosition + Vector3.up * RespawnGroundProbeHeight;
+        if (Physics.SphereCast(
+                castOrigin,
+                0.35f,
+                Vector3.down,
+                out RaycastHit hit,
+                RespawnGroundProbeDistance,
+                ~0,
+                QueryTriggerInteraction.Ignore))
+        {
+            return new Vector3(desiredPosition.x, hit.point.y + 1.0f, desiredPosition.z);
+        }
+
+        return desiredPosition;
     }
 
 #if UNITY_EDITOR
