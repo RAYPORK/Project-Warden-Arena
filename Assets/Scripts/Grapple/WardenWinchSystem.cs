@@ -146,6 +146,9 @@ public class WardenWinchSystem : MonoBehaviour
     [SerializeField]
     private WardenHealthManager healthManager;
 
+    /// <summary>勾索射程來源；於 <see cref="Start"/> 自雙親或場景自動尋找。</summary>
+    private PlayerStats _playerStats;
+
     private Rigidbody _rb;
     private SpringJoint _joint;
     private GameObject _anchorObject;
@@ -181,6 +184,13 @@ public class WardenWinchSystem : MonoBehaviour
             lineRenderer.enabled = false;
 
         _playerColliders = GetComponentsInChildren<Collider>(false);
+    }
+
+    /// <summary>快取 <see cref="PlayerStats"/>，供發射勾索時讀取 <see cref="PlayerStats.GrappleRange"/>。</summary>
+    private void Start()
+    {
+        _playerStats = GetComponentInParent<PlayerStats>()
+            ?? UnityEngine.Object.FindFirstObjectByType<PlayerStats>();
     }
 
     private void OnDisable()
@@ -259,10 +269,11 @@ public class WardenWinchSystem : MonoBehaviour
         if (playerCamera == null || winchExitPoint == null)
             return;
 
-        // 自視野中心發射，最大距離即初始繩長上限。Ignore Trigger：不命中 Is Trigger 碰撞器，避免風扇等障礙誤擋鋼索。
+        // 自視野中心發射；最大射線距離優先使用 PlayerStats.GrappleRange，否則沿用 Inspector 的 maxRopeLength。Ignore Trigger：不命中 Is Trigger 碰撞器，避免風扇等障礙誤擋鋼索。
         Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        float range = _playerStats != null ? _playerStats.GrappleRange : maxRopeLength;
         // 使用 RaycastAll 取得最近命中；GrappleOnly 這類目標可被勾住，穿透效果於連線後處理。
-        RaycastHit[] allHits = Physics.RaycastAll(ray, maxRopeLength, grappleLayers, QueryTriggerInteraction.Ignore);
+        RaycastHit[] allHits = Physics.RaycastAll(ray, range, grappleLayers, QueryTriggerInteraction.Ignore);
         RaycastHit hit = default;
         float nearest = float.MaxValue;
         bool foundValidHit = false;

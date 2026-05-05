@@ -35,9 +35,16 @@ public class MonsterBase : MonoBehaviour
     [SerializeField] private UnityEvent onDeath = new UnityEvent();
     [SerializeField] private UnityEvent<float> onDamageTaken = new UnityEvent<float>();
 
+    [Header("接觸玩家傷害")]
+    [Tooltip("怪物碰到玩家時造成的傷害。")]
+    [SerializeField] private float contactDamage = 10f;
+    [Tooltip("持續接觸時的最短受傷間隔（秒）。")]
+    [SerializeField] private float contactDamageInterval = 0.5f;
+
     private Coroutine _hitFlashRoutine;
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
     private bool _isDead;
+    private float _nextContactDamageTime;
 
     /// <summary>是否已死亡。</summary>
     public bool IsDead => _isDead;
@@ -54,6 +61,26 @@ public class MonsterBase : MonoBehaviour
         currentHealth = maxHealth;
         _isDead = false;
         EnsureGrappleCompatibility(allowAddComponent: true);
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        TryDealContactDamage(collision.collider);
+    }
+
+    private void OnCollisionStay(Collision collision)
+    {
+        TryDealContactDamage(collision.collider);
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        TryDealContactDamage(other);
+    }
+
+    private void OnTriggerStay(Collider other)
+    {
+        TryDealContactDamage(other);
     }
 
     protected virtual void OnDestroy()
@@ -83,7 +110,7 @@ public class MonsterBase : MonoBehaviour
             _hitFlashRoutine = StartCoroutine(HitFlashCoroutine());
         }
 
-        if (IsDead)
+        if (currentHealth <= 0f)
             Die();
     }
 
@@ -129,6 +156,7 @@ public class MonsterBase : MonoBehaviour
     /// <summary>重生後鉤點，供子類別恢復協程/特效/碰撞器狀態。</summary>
     protected virtual void OnRevived()
     {
+        _nextContactDamageTime = 0f;
     }
 
     /// <summary>一鍵重生所有已死亡敵人。</summary>
@@ -153,10 +181,31 @@ public class MonsterBase : MonoBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            Vector2 circle = Random.insideUnitCircle * radius;
+            Vector2 circle = UnityEngine.Random.insideUnitCircle * radius;
             Vector3 spawnPos = transform.position + new Vector3(circle.x, 0f, circle.y);
             Instantiate(energyOrbPrefab, spawnPos, Quaternion.identity);
         }
+    }
+
+    /// <summary>
+    /// 與玩家接觸時扣血（含碰撞與 Trigger）。
+    /// 透過間隔避免單幀內重複扣血過多。
+    /// </summary>
+    private void TryDealContactDamage(Collider other)
+    {
+        if (IsDead || other == null)
+            return;
+        if (contactDamage <= 0f)
+            return;
+        if (Time.time < _nextContactDamageTime)
+            return;
+
+        WardenHealthManager health = other.GetComponentInParent<WardenHealthManager>();
+        if (health == null)
+            return;
+
+        health.TakeDamage(contactDamage);
+        _nextContactDamageTime = Time.time + Mathf.Max(0.01f, contactDamageInterval);
     }
 
     /// <summary>
@@ -219,6 +268,8 @@ public class MonsterBase : MonoBehaviour
         energyDropRadius = Mathf.Max(0f, energyDropRadius);
         knockbackResistance = Mathf.Clamp01(knockbackResistance);
         hitFlashDuration = Mathf.Max(0f, hitFlashDuration);
+        contactDamage = Mathf.Max(0f, contactDamage);
+        contactDamageInterval = Mathf.Max(0.01f, contactDamageInterval);
         optionalRigidbody = GetComponent<Rigidbody>();
     }
 #endif

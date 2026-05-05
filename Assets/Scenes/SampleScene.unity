@@ -399,6 +399,135 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: -20, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &124590865
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 124590867}
+  - component: {fileID: 124590866}
+  m_Layer: 0
+  m_Name: WaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &124590866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 124590865}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa9fba0beecf22e49bf528c2d6530b3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  electricBallPrefab: {fileID: 7625368116512127723, guid: c0a9efdf0bbab08409b6516e08892d47, type: 3}
+  turretPrefab: {fileID: 8889366415586495212, guid: 2ef75a0bedae655439243176b93aeb67, type: 3}
+  airVentPrefab: {fileID: 3744710013373998964, guid: ddad13afc43d69245ae3868934496929, type: 3}
+  laserPillarPrefab: {fileID: 6258277025843529560, guid: 84b618e784fa3cf44a257c81c9c42c9f, type: 3}
+  arenaSize: 60
+  spawnHeightMin: 5
+  spawnHeightMax: 55
+  spawnMargin: 2
+  maxSpawnPositionAttempts: 24
+  spawnDistancePadding: 0.5
+  wavePrepTime: 3
+  monsterCheckInterval: 0.5
+  waves:
+  - waveName: Wave 1
+    electricBallCount: 20
+    turretCount: 0
+    airVentCount: 0
+    laserPillarCount: 0
+    spawnInterval: 0
+  - waveName: Wave 2
+    electricBallCount: 30
+    turretCount: 10
+    airVentCount: 0
+    laserPillarCount: 0
+    spawnInterval: 0
+  - waveName: Wave 3
+    electricBallCount: 40
+    turretCount: 1
+    airVentCount: 1
+    laserPillarCount: 0
+    spawnInterval: 0
+  - waveName: Wave 4
+    electricBallCount: 4
+    turretCount: 2
+    airVentCount: 1
+    laserPillarCount: 1
+    spawnInterval: 0
+  - waveName: Wave 5
+    electricBallCount: 5
+    turretCount: 2
+    airVentCount: 2
+    laserPillarCount: 1
+    spawnInterval: 0
+  - waveName: Wave 6
+    electricBallCount: 6
+    turretCount: 3
+    airVentCount: 2
+    laserPillarCount: 2
+    spawnInterval: 0
+  - waveName: Wave 7
+    electricBallCount: 6
+    turretCount: 3
+    airVentCount: 3
+    laserPillarCount: 2
+    spawnInterval: 0
+  - waveName: Wave 8
+    electricBallCount: 7
+    turretCount: 4
+    airVentCount: 3
+    laserPillarCount: 3
+    spawnInterval: 0
+  - waveName: Wave 8
+    electricBallCount: 8
+    turretCount: 4
+    airVentCount: 4
+    laserPillarCount: 3
+    spawnInterval: 0
+  - waveName: Wave 8
+    electricBallCount: 5
+    turretCount: 3
+    airVentCount: 3
+    laserPillarCount: 4
+    spawnInterval: 0
+  onWaveStart:
+    m_PersistentCalls:
+      m_Calls: []
+  onWaveCountdown:
+    m_PersistentCalls:
+      m_Calls: []
+  onWaveComplete:
+    m_PersistentCalls:
+      m_Calls: []
+  onAllWavesComplete:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!4 &124590867
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 124590865}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 30, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &140435319
 GameObject:
   m_ObjectHideFlags: 0
@@ -6099,6 +6228,7 @@ GameObject:
   - component: {fileID: 1516420783}
   - component: {fileID: 1516420789}
   - component: {fileID: 1516420790}
+  - component: {fileID: 1516420791}
   m_Layer: 6
   m_Name: PlayerRig
   m_TagString: Player
@@ -6432,114 +6562,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c8f91a2e3b4d5e6f7a8b9c0d1e2f304a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!1 &1525819784
-GameObject:
+--- !u!114 &1516420791
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1525819788}
-  - component: {fileID: 1525819787}
-  - component: {fileID: 1525819786}
-  - component: {fileID: 1525819785}
-  m_Layer: 0
-  m_Name: Cube
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!65 &1525819785
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1525819784}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
+  m_GameObject: {fileID: 1516420782}
   m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
---- !u!23 &1525819786
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1525819784}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &1525819787
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1525819784}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &1525819788
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1525819784}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -7.3, z: 16.3}
-  m_LocalScale: {x: 10, y: 0, z: 10}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9fc16f584b8e894d901f849d8cca4cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  baseMoveSpeed: 5
+  baseGrappleRange: 40
+  baseGrappleCooldown: 0
+  baseMaxHealth: 100
+  baseArmor: 0
+  baseHealthRegen: 0
+  baseLifesteal: 0
+  baseDodgeChance: 0
+  baseDamage: 10
+  baseMeleeDamage: 0
+  baseRangedDamage: 0
+  baseAttackSpeed: 1
+  baseCritChance: 0
+  baseCritMultiplier: 2
+  baseAoeRadius: 0
+  basePiercing: 0
+  baseLuck: 0
 --- !u!1 &1550650462
 GameObject:
   m_ObjectHideFlags: 0
@@ -7025,6 +7076,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 188176b1942cbaa4fae35434239f7901, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  playerStats: {fileID: 0}
   maxHealth: 100
   startingHealth: 100
   onHealthChanged:
@@ -7069,6 +7121,9 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+  onDamageDodged:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!4 &1680122219
 Transform:
   m_ObjectHideFlags: 0
@@ -8543,6 +8598,8 @@ MonoBehaviour:
   onDamageTaken:
     m_PersistentCalls:
       m_Calls: []
+  contactDamage: 10
+  contactDamageInterval: 0.5
 --- !u!135 &2094796081
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -8661,4 +8718,4 @@ SceneRoots:
   - {fileID: 276947141}
   - {fileID: 298920653}
   - {fileID: 2094796084}
-  - {fileID: 1525819788}
+  - {fileID: 124590867}

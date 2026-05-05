@@ -10,6 +10,11 @@ public class ElectricBallMonster : MonsterBase
     [SerializeField] private float moveSpeed = 3f;
     [SerializeField] private float hoverHeight = 0f;
     [SerializeField] private float stoppingDistance = 3f;
+    [SerializeField] private float separationStrength = 1.5f;
+    [SerializeField] private float separationPadding = 0.5f;
+    [SerializeField] private float expectedArenaHalfExtent = 28f;
+    [SerializeField] private float arenaMinY = 2f;
+    [SerializeField] private float arenaMaxY = 58f;
 
     [Header("電擊攻擊")]
     [Tooltip("外層電擊球半徑（公尺）。")]
@@ -32,6 +37,9 @@ public class ElectricBallMonster : MonsterBase
     private Collider _playerCollider;
     private float _spawnY;
 
+    /// <summary>供生成系統使用：電擊球外圈半徑（避免多顆重疊）。</summary>
+    public float OuterShellRadius => Mathf.Max(0.1f, attackRange);
+
     private void Start()
     {
         _spawnY = transform.position.y;
@@ -47,7 +55,6 @@ public class ElectricBallMonster : MonsterBase
     {
         if (IsDead)
             return;
-
         EnsurePlayerReference();
         if (playerTransform == null)
             return;
@@ -61,17 +68,26 @@ public class ElectricBallMonster : MonsterBase
         float desiredStoppingDistance = Mathf.Max(stoppingDistance, innerSafeRange);
         if (distance > desiredStoppingDistance && distance > 0.0001f)
         {
-            Vector3 step = toTarget.normalized * moveSpeed * Time.deltaTime;
+            Vector3 separationDir = ComputeSeparationDirection();
+            Vector3 desiredDir = toTarget.normalized;
+            if (separationDir.sqrMagnitude > 1e-8f)
+                desiredDir = (desiredDir + separationDir * separationStrength).normalized;
+
+            Vector3 step = desiredDir * moveSpeed * Time.deltaTime;
             if (step.magnitude > distance)
                 step = toTarget;
             transform.position += step;
         }
+
+        ResolveLocalOverlaps();
+        ClampInsideArena();
 
         Vector3 lookTarget = playerTransform.position;
         lookTarget.y = transform.position.y;
         Vector3 lookDir = lookTarget - transform.position;
         if (lookDir.sqrMagnitude > 1e-8f)
             transform.rotation = Quaternion.LookRotation(lookDir.normalized, Vector3.up);
+
     }
 
     private IEnumerator AttackCoroutine()
@@ -149,7 +165,7 @@ public class ElectricBallMonster : MonsterBase
     {
         if (_healthManager != null)
             return;
-        _healthManager = Object.FindFirstObjectByType<WardenHealthManager>();
+        _healthManager = UnityEngine.Object.FindFirstObjectByType<WardenHealthManager>();
     }
 
     /// <summary>以玩家中心點判定是否位於外層球內、內層球外（電擊環帶區）。</summary>
@@ -179,12 +195,80 @@ public class ElectricBallMonster : MonsterBase
         SetOuterShellVisible(true);
     }
 
+    /// <summary>
+    /// 計算同類電擊球的分離方向，避免追蹤玩家時互相疊在一起。
+    /// </summary>
+    private Vector3 ComputeSeparationDirection()
+    {
+        ElectricBallMonster[] all = UnityEngine.Object.FindObjectsByType<ElectricBallMonster>(FindObjectsSortMode.None);
+        Vector3 separation = Vector3.zero;
+        float desiredMin = OuterShellRadius * 2f + Mathf.Max(0f, separationPadding);
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            ElectricBallMonster other = all[i];
+            if (other == null || other == this || other.IsDead)
+                continue;
+
+            Vector3 delta = transform.position - other.transform.position;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f || dist >= desiredMin)
+                continue;
+
+            float overlapRatio = (desiredMin - dist) / desiredMin;
+            separation += delta.normalized * overlapRatio;
+        }
+
+        return separation;
+    }
+
+    private void ResolveLocalOverlaps()
+    {
+        ElectricBallMonster[] all = UnityEngine.Object.FindObjectsByType<ElectricBallMonster>(FindObjectsSortMode.None);
+        float desiredMin = OuterShellRadius * 2f + Mathf.Max(0f, separationPadding);
+        Vector3 correction = Vector3.zero;
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            ElectricBallMonster other = all[i];
+            if (other == null || other == this || other.IsDead)
+                continue;
+
+            Vector3 delta = transform.position - other.transform.position;
+            float dist = delta.magnitude;
+            if (dist >= desiredMin)
+                continue;
+
+            Vector3 dir = dist > 1e-4f ? delta / dist : UnityEngine.Random.onUnitSphere;
+            float penetration = desiredMin - Mathf.Max(dist, 1e-4f);
+            correction += dir * penetration;
+        }
+
+        if (correction.sqrMagnitude > 1e-8f)
+            transform.position += correction;
+    }
+
+    private void ClampInsideArena()
+    {
+        Vector3 p = transform.position;
+        float clampedX = Mathf.Clamp(p.x, -expectedArenaHalfExtent, expectedArenaHalfExtent);
+        float clampedY = Mathf.Clamp(p.y, arenaMinY, arenaMaxY);
+        float clampedZ = Mathf.Clamp(p.z, -expectedArenaHalfExtent, expectedArenaHalfExtent);
+
+        if (!Mathf.Approximately(p.x, clampedX) || !Mathf.Approximately(p.y, clampedY) || !Mathf.Approximately(p.z, clampedZ))
+            transform.position = new Vector3(clampedX, clampedY, clampedZ);
+    }
+
 #if UNITY_EDITOR
     protected override void OnValidate()
     {
         base.OnValidate();
         moveSpeed = Mathf.Max(0f, moveSpeed);
         stoppingDistance = Mathf.Max(0f, stoppingDistance);
+        separationStrength = Mathf.Max(0f, separationStrength);
+        separationPadding = Mathf.Max(0f, separationPadding);
+        expectedArenaHalfExtent = Mathf.Max(1f, expectedArenaHalfExtent);
+        arenaMaxY = Mathf.Max(arenaMinY, arenaMaxY);
         attackRange = Mathf.Max(0f, attackRange);
         innerSafeRange = Mathf.Clamp(innerSafeRange, 0f, attackRange);
         attackDamage = Mathf.Max(0f, attackDamage);

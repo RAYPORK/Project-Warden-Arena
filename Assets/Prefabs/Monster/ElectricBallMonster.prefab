@@ -155,7 +155,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 422f0b4c1e50c7149a3e205ae735adad, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHealth: 100
+  maxHealth: 1
   currentHealth: 0
   energyOrbPrefab: {fileID: 0}
   energyDropCount: 1
@@ -179,7 +179,6 @@ MonoBehaviour:
   attackRange: 3
   innerSafeRange: 1.5
   attackDamage: 10
-  attackInterval: 2
   attackWindup: 0.5
   electricOuterShellVisual: {fileID: 8238368393838829209}
   electricOuterShellCollider: {fileID: 3540544099015606101}
