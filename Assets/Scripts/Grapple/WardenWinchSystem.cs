@@ -79,9 +79,13 @@ public class WardenWinchSystem : MonoBehaviour
 
     [Header("鬆線手感")]
     [Tooltip(
-        "鬆開左鍵時從線速度扣除「沿繩（WinchExitPoint→Anchor）」的分量，只保留垂直於繩的擺盪切向速度。" +
-        "SpringJoint 斷線瞬間若保留完整速度，張力常殘留成「往錨點射出」的投石器感；建議保持開啟。")]
-    [SerializeField] private bool retainTangentialVelocityOnRelease = true;
+        "鬆開左鍵時是否抑制沿繩分量（WinchExitPoint→Anchor）。" +
+        "若你想保留 Apex 風格飛出慣性可關閉，或搭配下方比例僅做輕微抑制。")]
+    [SerializeField] private bool retainTangentialVelocityOnRelease = false;
+
+    [Tooltip("鬆線時保留多少沿繩速度：1 = 完整保留慣性、0 = 完全移除沿繩分量。")]
+    [Range(0f, 1f)]
+    [SerializeField] private float radialVelocityRetentionOnRelease = 1f;
 
     [Header("收盡繩後漸停")]
     [Tooltip("繩長已收到最短且未操作空中 WASD 時，對線速度做指數衰減，讓殘餘擺動慢慢停下。")]
@@ -547,8 +551,8 @@ public class WardenWinchSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 真實繩索鬆手時張力瞬間消失，沿繩徑向速度不應保留；SpringJoint 斷線若保留全速度，易變成往錨點「彈射」。
-    /// 將線速度投影到垂直於繩軸的平面（扣除沿繩分量），只保留擺盪切向。
+    /// 依設定削減鬆線時的沿繩速度分量。
+    /// 0 = 全扣（只留切向）；1 = 完整保留（Apex 風格慣性）。
     /// </summary>
     private void ApplyTangentialVelocityOnRelease()
     {
@@ -562,7 +566,9 @@ public class WardenWinchSystem : MonoBehaviour
 
         Vector3 ropeUnit = rope * (1f / Mathf.Sqrt(magSq));
         Vector3 v = _rb.linearVelocity;
-        v -= Vector3.Dot(v, ropeUnit) * ropeUnit;
+        float radial = Vector3.Dot(v, ropeUnit);
+        float removal = 1f - Mathf.Clamp01(radialVelocityRetentionOnRelease);
+        v -= radial * removal * ropeUnit;
         _rb.linearVelocity = v;
     }
 
@@ -697,6 +703,7 @@ public class WardenWinchSystem : MonoBehaviour
         anchorOffsetAlongHitNormal = Mathf.Max(0f, anchorOffsetAlongHitNormal);
         reelInAcceleration = Mathf.Max(0f, reelInAcceleration);
         reelInMaxSpeed = Mathf.Max(0f, reelInMaxSpeed);
+        radialVelocityRetentionOnRelease = Mathf.Clamp01(radialVelocityRetentionOnRelease);
         lavaGrappleDamagePerSecond = Mathf.Max(0f, lavaGrappleDamagePerSecond);
         iceGrappleHorizontalSlowdownPerSecond = Mathf.Max(0f, iceGrappleHorizontalSlowdownPerSecond);
     }
