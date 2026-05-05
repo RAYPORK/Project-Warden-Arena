@@ -124,6 +124,14 @@ public class ElectricBallMonster : MonsterBase
         base.Die();
     }
 
+    protected override void OnRevived()
+    {
+        EnsurePlayerReference();
+        EnsureHealthManagerReference();
+        StopAllCoroutines();
+        StartCoroutine(AttackCoroutine());
+    }
+
     private void EnsurePlayerReference()
     {
         if (playerTransform != null)

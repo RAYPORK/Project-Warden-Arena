@@ -136,6 +136,12 @@ public class Turret : MonsterBase
         base.Die();
     }
 
+    protected override void OnRevived()
+    {
+        _nextFireTime = UnarmedNextFire;
+        EnsurePlayerReference();
+    }
+
 #if UNITY_EDITOR
     protected override void OnValidate()
     {

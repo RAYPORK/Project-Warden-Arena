@@ -35,6 +35,12 @@ public class WardenDeathManager : MonoBehaviour
     [SerializeField] private Transform playerRespawnRoot;
 
     [SerializeField] private Vector3 respawnWorldPosition = new Vector3(0f, 2f, 0f);
+    [Tooltip("為 true 時，遊戲啟動時以玩家當前位置作為固定重生點，避免重生落在死亡位置。")]
+    [SerializeField] private bool useInitialPlayerPositionAsRespawn = true;
+
+    [Header("快捷鍵")]
+    [Tooltip("死亡後可按此鍵快速重來。")]
+    [SerializeField] private KeyCode retryKey = KeyCode.R;
 
     [Header("淡入")]
     [SerializeField] private float gameOverFadeInSeconds = 0.5f;
@@ -52,6 +58,9 @@ public class WardenDeathManager : MonoBehaviour
     /// <summary>改於 Awake：與其他系統一致，避免非同步載入後 <c>Start</c> 延遲導致從未執行。</summary>
     private void Awake()
     {
+        if (useInitialPlayerPositionAsRespawn && playerRespawnRoot != null)
+            respawnWorldPosition = playerRespawnRoot.position;
+
         _sessionStartTime = Time.time;
 
         ApplyStatsFontAndAsciiPlaceholders();
@@ -102,6 +111,9 @@ public class WardenDeathManager : MonoBehaviour
     private void Update()
     {
         // 下方掉落死亡邏輯已移除（封閉競技場不使用死亡邊界）。
+        // 死亡後提供快捷鍵重來，避免只能用 UI 按鈕。
+        if (_isDead && Input.GetKeyDown(retryKey))
+            PerformRunRestart(hideDeathPanel: true);
     }
 
     private void OnDestroy()
@@ -260,6 +272,8 @@ public class WardenDeathManager : MonoBehaviour
     private void OnValidate()
     {
         gameOverFadeInSeconds = Mathf.Max(0.01f, gameOverFadeInSeconds);
+        if (!System.Enum.IsDefined(typeof(KeyCode), retryKey))
+            retryKey = KeyCode.R;
     }
 #endif
 }

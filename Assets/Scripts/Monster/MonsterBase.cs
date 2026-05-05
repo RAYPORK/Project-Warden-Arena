@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -7,6 +8,8 @@ using UnityEngine.Events;
 /// </summary>
 public class MonsterBase : MonoBehaviour
 {
+    private static readonly List<MonsterBase> AllMonsters = new List<MonsterBase>();
+
     [Header("生命值")]
     [SerializeField] private float maxHealth = 100f;
     [SerializeField] private float currentHealth;
@@ -34,9 +37,10 @@ public class MonsterBase : MonoBehaviour
 
     private Coroutine _hitFlashRoutine;
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+    private bool _isDead;
 
     /// <summary>是否已死亡。</summary>
-    public bool IsDead => currentHealth <= 0f;
+    public bool IsDead => _isDead;
     /// <summary>是否可被擊退（供子類別或攻擊系統查詢）。</summary>
     public bool CanBeKnockedBack => canBeKnockedBack;
     /// <summary>擊退抗性：0 = 完整擊退，1 = 完全免疫。</summary>
@@ -44,8 +48,17 @@ public class MonsterBase : MonoBehaviour
 
     protected virtual void Awake()
     {
+        if (!AllMonsters.Contains(this))
+            AllMonsters.Add(this);
+
         currentHealth = maxHealth;
+        _isDead = false;
         EnsureGrappleCompatibility(allowAddComponent: true);
+    }
+
+    protected virtual void OnDestroy()
+    {
+        AllMonsters.Remove(this);
     }
 
     /// <summary>
@@ -94,9 +107,40 @@ public class MonsterBase : MonoBehaviour
     /// </summary>
     protected virtual void Die()
     {
+        _isDead = true;
+        currentHealth = 0f;
         onDeath?.Invoke();
         SpawnEnergyOrbs();
-        Destroy(gameObject);
+        gameObject.SetActive(false);
+    }
+
+    /// <summary>由重生系統呼叫：回滿血並重新啟用怪物。</summary>
+    public void Revive()
+    {
+        if (!_isDead)
+            return;
+
+        currentHealth = maxHealth;
+        _isDead = false;
+        gameObject.SetActive(true);
+        OnRevived();
+    }
+
+    /// <summary>重生後鉤點，供子類別恢復協程/特效/碰撞器狀態。</summary>
+    protected virtual void OnRevived()
+    {
+    }
+
+    /// <summary>一鍵重生所有已死亡敵人。</summary>
+    public static void ReviveAllDeadMonsters()
+    {
+        for (int i = 0; i < AllMonsters.Count; i++)
+        {
+            MonsterBase monster = AllMonsters[i];
+            if (monster == null || !monster._isDead)
+                continue;
+            monster.Revive();
+        }
     }
 
     private void SpawnEnergyOrbs()

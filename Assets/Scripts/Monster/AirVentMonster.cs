@@ -93,6 +93,15 @@ public class AirVentMonster : MonsterBase
         base.Die();
     }
 
+    protected override void OnRevived()
+    {
+        if (_ventTrigger == null)
+            BuildVentTrigger();
+        else
+            _ventTrigger.enabled = true;
+        EnsurePlayerReference();
+    }
+
     /// <summary>未指派玩家時，以 Tag「Player」自動尋找。</summary>
     private void EnsurePlayerReference()
     {
