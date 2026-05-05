@@ -24,6 +24,10 @@ public class MonsterBase : MonoBehaviour
     [SerializeField] private Renderer[] renderers;
     [SerializeField] private float hitFlashDuration = 0.1f;
 
+    [Header("勾索相容")]
+    [Tooltip("可選：若怪物帶 Rigidbody，勾索時可被甩動。")]
+    [SerializeField] private Rigidbody optionalRigidbody;
+
     [Header("事件")]
     [SerializeField] private UnityEvent onDeath = new UnityEvent();
     [SerializeField] private UnityEvent<float> onDamageTaken = new UnityEvent<float>();
@@ -41,6 +45,7 @@ public class MonsterBase : MonoBehaviour
     protected virtual void Awake()
     {
         currentHealth = maxHealth;
+        EnsureGrappleCompatibility(allowAddComponent: true);
     }
 
     /// <summary>
@@ -148,6 +153,19 @@ public class MonsterBase : MonoBehaviour
         _hitFlashRoutine = null;
     }
 
+    /// <summary>確保怪物可被鋼索系統視為可勾目標（自動補 PlatformType=Concrete）。</summary>
+    private void EnsureGrappleCompatibility(bool allowAddComponent)
+    {
+        optionalRigidbody = GetComponent<Rigidbody>();
+
+        PlatformType platform = GetComponent<PlatformType>();
+        if (platform == null && allowAddComponent)
+            platform = gameObject.AddComponent<PlatformType>();
+        if (platform == null)
+            return;
+        platform.type = MaterialType.Concrete;
+    }
+
 #if UNITY_EDITOR
     protected virtual void OnValidate()
     {
@@ -157,6 +175,7 @@ public class MonsterBase : MonoBehaviour
         energyDropRadius = Mathf.Max(0f, energyDropRadius);
         knockbackResistance = Mathf.Clamp01(knockbackResistance);
         hitFlashDuration = Mathf.Max(0f, hitFlashDuration);
+        optionalRigidbody = GetComponent<Rigidbody>();
     }
 #endif
 }

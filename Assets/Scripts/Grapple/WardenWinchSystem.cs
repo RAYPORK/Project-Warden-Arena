@@ -120,10 +120,13 @@ public class WardenWinchSystem : MonoBehaviour
     [Tooltip("鋼索成功發射並建立連線後觸發（可綁定音效／特效等）")]
     [SerializeField] private UnityEvent onGrappleLaunched = new UnityEvent();
 
-    [Header("怪物攻擊")]
-    [SerializeField] private float baseGrappleDamage = 20f;
-    [Tooltip("速度越快傷害越高的倍率")]
-    [SerializeField] private float speedDamageMultiplier = 1f;
+    [Header("物理攻擊")]
+    [SerializeField] private float attackSpeedThreshold = 8f;
+    [SerializeField] private float attackDamageMultiplier = 1f;
+    [SerializeField] private float minAttackDamage = 10f;
+    [SerializeField] private float bounceForce = 5f;
+    [Tooltip("高速撞擊怪物後，該怪物在此秒數內不可再次被勾中。")]
+    [SerializeField] private float monsterRegrappleCooldownSeconds = 0.2f;
 
     [Header("繩索材質效果（連線中）")]
     [Tooltip("鋼索錨在岩漿表面時，每秒基準傷害（會乘上 FixedUpdate 步長後傳給下方事件）。")]
@@ -146,6 +149,9 @@ public class WardenWinchSystem : MonoBehaviour
     private float _currentRopeLength;
     private bool _connected;
     private bool _skipSurfacePenetrationResolve;
+    private MonsterBase _connectedMonster;
+    private MonsterBase _recentlyImpactDamagedMonster;
+    private float _recentMonsterNoGrappleUntilTime;
     private Collider[] _playerColliders;
     private Collider[] _ignoredSurfaceColliders;
     private Collider[] _grappledSurfaceColliders;
@@ -240,7 +246,7 @@ public class WardenWinchSystem : MonoBehaviour
             DisconnectGrapple();
     }
 
-    /// <summary>左鍵按下時嘗試發射：命中怪物則造成傷害；命中可勾表面才建立錨點與 Joint。</summary>
+    /// <summary>左鍵按下時嘗試發射：命中具 PlatformType 的物件（含怪物）即可建立錨點與 Joint。</summary>
     private void TryFireGrapple()
     {
         if (playerCamera == null || winchExitPoint == null)
@@ -267,16 +273,11 @@ public class WardenWinchSystem : MonoBehaviour
         if (!foundValidHit)
             return;
 
-        // 命中怪物時改為攻擊，不建立勾索連線。
-        MonsterBase monster = hit.collider.GetComponentInParent<MonsterBase>();
-        if (monster != null && !monster.IsDead)
+        MonsterBase hitMonster = hit.collider.GetComponentInParent<MonsterBase>();
+        if (hitMonster != null &&
+            hitMonster == _recentlyImpactDamagedMonster &&
+            Time.time < _recentMonsterNoGrappleUntilTime)
         {
-            float speed = _rb.linearVelocity.magnitude;
-            float damage = baseGrappleDamage + speed * speedDamageMultiplier;
-            Vector3 hitDirection = ray.direction;
-            monster.TakeDamage(damage, hitDirection);
-            // 命中怪物也播放鋼索音效回饋。
-            onGrappleLaunched?.Invoke();
             return;
         }
 
@@ -306,10 +307,11 @@ public class WardenWinchSystem : MonoBehaviour
 
         CreateAnchor(anchorWorld, hit.collider.transform);
 
-        AttachSpringJoint(ropeLen);
+        AttachSpringJoint(ropeLen, hit);
         _currentRopeLength = ropeLen;
         _connected = true;
         _grappleSurfaceMaterial = platform.type;
+        _connectedMonster = hitMonster;
 
         if (lineRenderer != null)
             lineRenderer.enabled = true;
@@ -341,17 +343,26 @@ public class WardenWinchSystem : MonoBehaviour
     }
 
     /// <summary>於角色上新增 SpringJoint：連至場景錨點，並套用指定 Spring／Damper／碰撞。</summary>
-    private void AttachSpringJoint(float initialLength)
+    private void AttachSpringJoint(float initialLength, in RaycastHit hit)
     {
         if (_joint != null)
             Destroy(_joint);
 
         _joint = gameObject.AddComponent<SpringJoint>();
-        _joint.connectedBody = null;
         _joint.autoConfigureConnectedAnchor = false;
         // 錨點跟隨 WinchExitPoint（本體局部座標），另一端為場景上的 Anchor 世界座標。
         _joint.anchor = _rb.transform.InverseTransformPoint(winchExitPoint.position);
-        _joint.connectedAnchor = _anchorObject.transform.position;
+        Rigidbody targetRb = hit.rigidbody;
+        if (targetRb != null)
+        {
+            _joint.connectedBody = targetRb;
+            _joint.connectedAnchor = targetRb.transform.InverseTransformPoint(_anchorObject.transform.position);
+        }
+        else
+        {
+            _joint.connectedBody = null;
+            _joint.connectedAnchor = _anchorObject.transform.position;
+        }
 
         _joint.spring = jointSpring;
         _joint.damper = jointDamper;
@@ -377,7 +388,10 @@ public class WardenWinchSystem : MonoBehaviour
 
         // 角色旋轉時仍從出口點連線至 Anchor。
         _joint.anchor = _rb.transform.InverseTransformPoint(winchExitPoint.position);
-        _joint.connectedAnchor = _anchorObject.transform.position;
+        if (_joint.connectedBody != null)
+            _joint.connectedAnchor = _joint.connectedBody.transform.InverseTransformPoint(_anchorObject.transform.position);
+        else
+            _joint.connectedAnchor = _anchorObject.transform.position;
         float len = Mathf.Clamp(_currentRopeLength, minRopeLength, maxRopeLength);
         _joint.minDistance = minRopeLength;
         _joint.maxDistance = len;
@@ -405,6 +419,7 @@ public class WardenWinchSystem : MonoBehaviour
         _connected = false;
         _skipSurfacePenetrationResolve = false;
         _grappleSurfaceMaterial = MaterialType.Concrete;
+        _connectedMonster = null;
         _grappledSurfaceColliders = null;
 
         if (lineRenderer != null)
@@ -412,6 +427,34 @@ public class WardenWinchSystem : MonoBehaviour
 
         // 鬆線後恢復與平台的碰撞（須在銷毀 Joint 之後仍執行）。
         EndIgnoreGrappleCollider();
+    }
+
+    /// <summary>高速撞擊怪物時造成傷害並彈開；低速碰觸則不處理，仍可正常勾索。</summary>
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision == null || collision.contactCount <= 0)
+            return;
+
+        MonsterBase monster = collision.collider.GetComponentInParent<MonsterBase>();
+        if (monster == null || monster.IsDead)
+            return;
+
+        float speed = collision.relativeVelocity.magnitude;
+        if (speed <= attackSpeedThreshold)
+            return;
+
+        Vector3 hitDirection = collision.relativeVelocity.sqrMagnitude > 1e-8f
+            ? collision.relativeVelocity.normalized
+            : -collision.contacts[0].normal;
+        float damage = minAttackDamage + speed * attackDamageMultiplier;
+        monster.TakeDamage(damage, hitDirection);
+        _recentlyImpactDamagedMonster = monster;
+        _recentMonsterNoGrappleUntilTime = Time.time + monsterRegrappleCooldownSeconds;
+
+        _rb.AddForce(-collision.contacts[0].normal * bounceForce, ForceMode.Impulse);
+
+        if (_connected && _connectedMonster == monster)
+            DisconnectGrapple();
     }
 
     /// <summary>連線在岩漿／冰上時的持續效果（之後若要改為「繩段掃過才觸發」可改寫此處）。</summary>
@@ -752,8 +795,11 @@ public class WardenWinchSystem : MonoBehaviour
         reelInAcceleration = Mathf.Max(0f, reelInAcceleration);
         reelInMaxSpeed = Mathf.Max(0f, reelInMaxSpeed);
         radialVelocityRetentionOnRelease = Mathf.Clamp01(radialVelocityRetentionOnRelease);
-        baseGrappleDamage = Mathf.Max(0f, baseGrappleDamage);
-        speedDamageMultiplier = Mathf.Max(0f, speedDamageMultiplier);
+        attackSpeedThreshold = Mathf.Max(0f, attackSpeedThreshold);
+        attackDamageMultiplier = Mathf.Max(0f, attackDamageMultiplier);
+        minAttackDamage = Mathf.Max(0f, minAttackDamage);
+        bounceForce = Mathf.Max(0f, bounceForce);
+        monsterRegrappleCooldownSeconds = Mathf.Max(0f, monsterRegrappleCooldownSeconds);
         lavaGrappleDamagePerSecond = Mathf.Max(0f, lavaGrappleDamagePerSecond);
         iceGrappleHorizontalSlowdownPerSecond = Mathf.Max(0f, iceGrappleHorizontalSlowdownPerSecond);
     }
