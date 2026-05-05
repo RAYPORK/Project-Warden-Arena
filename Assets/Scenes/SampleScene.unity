@@ -6229,6 +6229,7 @@ GameObject:
   - component: {fileID: 1516420789}
   - component: {fileID: 1516420790}
   - component: {fileID: 1516420791}
+  - component: {fileID: 1516420792}
   m_Layer: 6
   m_Name: PlayerRig
   m_TagString: Player
@@ -6591,6 +6592,32 @@ MonoBehaviour:
   baseAoeRadius: 0
   basePiercing: 0
   baseLuck: 0
+--- !u!114 &1516420792
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1516420782}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f09ac82f2aea7b540b7617b61a78ea27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerStats: {fileID: 1516420791}
+  playerCamera: {fileID: 330585545}
+  attackOrigin: {fileID: 1495588774}
+  isMeleeCharacter: 0
+  projectilePrefab: {fileID: 9016169764809810248, guid: 8241e72e744a81b46b7850a4836a8525, type: 3}
+  projectileSpeed: 30
+  attackCooldown: 0.5
+  meleeRange: 5
+  meleeKnockback: 10
+  meleeCooldown: 0.3
+  attackCooldownRemaining: 0
+  meleeHitLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!1 &1550650462
 GameObject:
   m_ObjectHideFlags: 0

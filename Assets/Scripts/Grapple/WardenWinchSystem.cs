@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 /// <summary>
-/// 第一人稱鋼索／捲揚：由主攝影機發射 Raycast，擊中具 <see cref="PlatformType"/> 的水泥／岩漿／冰表面後以 SpringJoint 連線並收線，錨點在命中點附近（沿法線略外推）；
+/// 第一人稱鋼索／捲揚（滑鼠右鍵）：由主攝影機發射 Raycast，擊中具 <see cref="PlatformType"/> 的水泥／岩漿／冰表面後以 SpringJoint 連線並收線，錨點在命中點附近（沿法線略外推）；
 /// 連線在岩漿上可透過事件扣血、在冰上可減水平速（皆可於 Inspector 調整）。連線期間不套用空中 WASD 加力，僅懸掛與收線。
 /// 所有 <see cref="Physics.Raycast"/> 皆帶 <see cref="QueryTriggerInteraction.Ignore"/>，避免僅作觸發用的 Collider（例如風扇、能量方塊）擋住鋼索或著地射線。
 /// </summary>
@@ -83,7 +83,7 @@ public class WardenWinchSystem : MonoBehaviour
 
     [Header("鬆線手感")]
     [Tooltip(
-        "鬆開左鍵時是否抑制沿繩分量（WinchExitPoint→Anchor）。" +
+        "鬆開右鍵時是否抑制沿繩分量（WinchExitPoint→Anchor）。" +
         "若你想保留 Apex 風格飛出慣性可關閉，或搭配下方比例僅做輕微抑制。")]
     [SerializeField] private bool retainTangentialVelocityOnRelease = false;
 
@@ -217,14 +217,14 @@ public class WardenWinchSystem : MonoBehaviour
     {
         if (WardenDevFlyMode.IsFlying)
             return;
-        // 按住左鍵期間持續收線（不需額外輸入）。
-        if (_connected && Input.GetMouseButton(0))
+        // 按住右鍵期間持續收線（不需額外輸入）。
+        if (_connected && Input.GetMouseButton(1))
             ApplyRopeShortening();
 
         if (_connected && _joint != null)
             SyncJointToRopeLength();
 
-        if (_connected && Input.GetMouseButton(0))
+        if (_connected && Input.GetMouseButton(1))
             ApplyReelInAcceleration();
 
         if (_connected && !_skipSurfacePenetrationResolve)
@@ -253,17 +253,17 @@ public class WardenWinchSystem : MonoBehaviour
             DisconnectGrapple();
     }
 
-    /// <summary>滑鼠左鍵：按下發射、按住維持連線並收線、放開切斷並保留動量。</summary>
+    /// <summary>滑鼠右鍵：按下發射、按住維持連線並收線、放開切斷並保留動量。</summary>
     private void HandleGrappleInput()
     {
-        if (Input.GetMouseButtonDown(0) && !_connected)
+        if (Input.GetMouseButtonDown(1) && !_connected)
             TryFireGrapple();
 
-        if (Input.GetMouseButtonUp(0) && _connected)
+        if (Input.GetMouseButtonUp(1) && _connected)
             DisconnectGrapple();
     }
 
-    /// <summary>左鍵按下時嘗試發射：命中具 PlatformType 的物件（含怪物）即可建立錨點與 Joint。</summary>
+    /// <summary>右鍵按下時嘗試發射：命中具 PlatformType 的物件（含怪物）即可建立錨點與 Joint。</summary>
     private void TryFireGrapple()
     {
         if (playerCamera == null || winchExitPoint == null)
@@ -416,7 +416,7 @@ public class WardenWinchSystem : MonoBehaviour
         _joint.maxDistance = len;
     }
 
-    /// <summary>左鍵放開：先依設定修正鬆線速度，再移除 Joint／Anchor（可選合速度上限）。</summary>
+    /// <summary>右鍵放開：先依設定修正鬆線速度，再移除 Joint／Anchor（可選合速度上限）。</summary>
     private void DisconnectGrapple()
     {
         // 須在刪除 Anchor 前計算沿繩方向。
