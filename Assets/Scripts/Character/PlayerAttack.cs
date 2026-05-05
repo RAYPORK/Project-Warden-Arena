@@ -47,6 +47,15 @@ public class PlayerAttack : MonoBehaviour
     [SerializeField]
     private float meleeCooldown = 0.3f;
 
+    [Header("近戰視覺")]
+    [Tooltip("近戰成功命中至少一隻怪時，於攻擊原點生成的球形閃光／特效（可空）")]
+    [SerializeField]
+    private GameObject meleeEffectPrefab;
+
+    [Tooltip("近戰特效存在時間（秒），到期後自動銷毀")]
+    [SerializeField]
+    private float meleeEffectDuration = 0.2f;
+
     [Header("視覺回饋")]
     [Tooltip("剩餘攻擊冷卻（秒），由執行期更新，僅供除錯／UI 參考")]
     [SerializeField]
@@ -174,6 +183,13 @@ public class PlayerAttack : MonoBehaviour
             ApplyMeleeKnockback(monster, origin);
         }
 
+        // 至少命中一隻怪時，於攻擊原點生成短暫球形閃光（Prefab 可為粒子或帶縮放動畫之球體）
+        if (struck.Count > 0 && meleeEffectPrefab != null)
+        {
+            GameObject effect = Instantiate(meleeEffectPrefab, origin, Quaternion.identity);
+            Destroy(effect, Mathf.Max(0.01f, meleeEffectDuration));
+        }
+
         if (_healthManager != null && totalDamage > 0f)
             _healthManager.Heal(playerStats.CalculateLifesteal(totalDamage));
 
@@ -257,6 +273,7 @@ public class PlayerAttack : MonoBehaviour
         meleeRange = Mathf.Max(0.01f, meleeRange);
         meleeKnockback = Mathf.Max(0f, meleeKnockback);
         meleeCooldown = Mathf.Max(0.01f, meleeCooldown);
+        meleeEffectDuration = Mathf.Max(0.01f, meleeEffectDuration);
         attackCooldownRemaining = Mathf.Max(0f, attackCooldownRemaining);
         cooldownDebugLogInterval = Mathf.Max(0.05f, cooldownDebugLogInterval);
     }

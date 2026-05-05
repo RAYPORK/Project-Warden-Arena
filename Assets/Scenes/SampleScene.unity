@@ -6607,14 +6607,17 @@ MonoBehaviour:
   playerStats: {fileID: 1516420791}
   playerCamera: {fileID: 330585545}
   attackOrigin: {fileID: 1495588774}
-  isMeleeCharacter: 0
+  isMeleeCharacter: 1
   projectilePrefab: {fileID: 9016169764809810248, guid: 8241e72e744a81b46b7850a4836a8525, type: 3}
   projectileSpeed: 30
   attackCooldown: 0.5
   meleeRange: 5
   meleeKnockback: 10
   meleeCooldown: 0.3
+  meleeEffectPrefab: {fileID: 5479877900202811358, guid: 28d091f2c21b13442b00ab8158104ff2, type: 3}
+  meleeEffectDuration: 0.2
   attackCooldownRemaining: 0
+  cooldownDebugLogInterval: 0.25
   meleeHitLayers:
     serializedVersion: 2
     m_Bits: 4294967295
