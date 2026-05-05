@@ -61,12 +61,6 @@ public class PlayerAttack : MonoBehaviour
     [SerializeField]
     private float attackCooldownRemaining;
 
-    [Tooltip("冷卻中 Console 除錯訊息的最小間隔（秒），避免每幀洗版")]
-    [SerializeField]
-    private float cooldownDebugLogInterval = 0.25f;
-
-    private float _lastCooldownDebugLogTime = -999f;
-
     [Tooltip("近戰 OverlapSphere 用；未指定時預設為全部圖層並以 MonsterBase 篩選")]
     [SerializeField]
     private LayerMask meleeHitLayers = ~0;
@@ -98,14 +92,6 @@ public class PlayerAttack : MonoBehaviour
             attackCooldownRemaining -= Time.deltaTime;
         if (attackCooldownRemaining < 0f)
             attackCooldownRemaining = 0f;
-
-        // 尚無 HUD 準心變色時，以 Console 顯示剩餘冷卻（測試用；依間隔節流避免每幀刷 log）
-        if (attackCooldownRemaining > 0f &&
-            Time.unscaledTime - _lastCooldownDebugLogTime >= Mathf.Max(0.05f, cooldownDebugLogInterval))
-        {
-            _lastCooldownDebugLogTime = Time.unscaledTime;
-            Debug.Log($"[PlayerAttack] 冷卻中：{attackCooldownRemaining:F1} 秒");
-        }
 
         if (!Input.GetMouseButtonDown(0))
             return;
@@ -275,7 +261,6 @@ public class PlayerAttack : MonoBehaviour
         meleeCooldown = Mathf.Max(0.01f, meleeCooldown);
         meleeEffectDuration = Mathf.Max(0.01f, meleeEffectDuration);
         attackCooldownRemaining = Mathf.Max(0f, attackCooldownRemaining);
-        cooldownDebugLogInterval = Mathf.Max(0.05f, cooldownDebugLogInterval);
     }
 #endif
 }

@@ -1149,6 +1149,65 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &210490404
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 210490406}
+  - component: {fileID: 210490405}
+  m_Layer: 12
+  m_Name: EnergyManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &210490405
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 210490404}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 81885e2231dd4d84ca67e5015c1d5085, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  energyToLevelUp: 100
+  currentEnergy: 0
+  pickupRadius: 16
+  attractSpeed: 15
+  absorbRadius: 2
+  playerTransform: {fileID: 1516420788}
+  energyOrbLayer:
+    serializedVersion: 2
+    m_Bits: 64
+  onEnergyChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  onReadyToLevelUp:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!4 &210490406
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 210490404}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -12.831141, y: 9.247022, z: 4.16336}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &215810042
 GameObject:
   m_ObjectHideFlags: 0
@@ -8750,3 +8809,4 @@ SceneRoots:
   - {fileID: 298920653}
   - {fileID: 2094796084}
   - {fileID: 124590867}
+  - {fileID: 210490406}

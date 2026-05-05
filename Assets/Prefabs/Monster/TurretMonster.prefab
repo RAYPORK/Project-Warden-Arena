@@ -166,9 +166,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHealth: 100
   currentHealth: 0
-  energyOrbPrefab: {fileID: 0}
-  energyDropCount: 1
-  energyDropRadius: 1
+  energyOrbPrefab: {fileID: 3472934611952708806, guid: 4e3bc468b27a1434b9453648af6887ba, type: 3}
+  energyDropCount: 3
+  energyDropRadius: 2
   canBeKnockedBack: 1
   knockbackResistance: 0
   renderers:
@@ -181,9 +181,9 @@ MonoBehaviour:
   onDamageTaken:
     m_PersistentCalls:
       m_Calls: []
+  contactDamage: 10
+  contactDamageInterval: 0.5
   playerTransform: {fileID: 0}
-  detectionRadius: 25
-  detectionSphereVisual: {fileID: 0}
   moveSpeed: 2
   idealDistance: 20
   distanceTolerance: 3
