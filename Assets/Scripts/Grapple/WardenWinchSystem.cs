@@ -45,19 +45,26 @@ public class WardenWinchSystem : MonoBehaviour
     [SerializeField] private float minRopeLength = 2f;
 
     [Tooltip("自動收線速率（公尺／秒）")]
-    [SerializeField] private float ropeShortenMetersPerSecond = 3f;
+    [SerializeField] private float ropeShortenMetersPerSecond = 12f;
 
     [Header("錨點")]
-    [Tooltip("沿命中表面法線外推錨點（公尺），避免錨點陷入網格；懸掛在命中點外側。")]
-    [SerializeField] private float anchorOffsetAlongHitNormal = 0.08f;
+    [Tooltip("錨點沿命中法線偏移距離（公尺）；設為 0 時錨點貼在命中點。")]
+    [SerializeField] private float anchorOffsetAlongHitNormal = 0f;
 
-    [Tooltip("連線期間忽略與「被命中物件及其子階層」上非 Trigger 碰撞器的碰撞，避免被底／側面擠壓；鬆線後自動恢復。")]
-    [SerializeField] private bool ignoreCollisionWithGrappledCollider = true;
+    [Tooltip("連線期間是否忽略與被勾平台碰撞；封閉競技場建議關閉，避免被拉進牆後直接穿出場外。")]
+    [SerializeField] private bool ignoreCollisionWithGrappledCollider = false;
 
     [Header("Spring Joint")]
-    [SerializeField] private float jointSpring = 80f;
+    [SerializeField] private float jointSpring = 150f;
 
-    [SerializeField] private float jointDamper = 10f;
+    [SerializeField] private float jointDamper = 18f;
+
+    [Header("收繩推進（Apex 風格）")]
+    [Tooltip("按住收繩時，額外沿繩方向加速推進（m/s^2）。0 表示只靠縮短繩長。")]
+    [SerializeField] private float reelInAcceleration = 45f;
+
+    [Tooltip("按住收繩時，沿繩方向最大速度（m/s）。達上限後停止額外推進，避免失控。0 表示不限制。")]
+    [SerializeField] private float reelInMaxSpeed = 28f;
 
     [Header("空中操控（未連鋼索時）")]
     [Tooltip("僅在未連鋼索且判定為空中時，對 Rigidbody 施加的力道（連線時不套用，避免刻意擺盪）。")]
@@ -129,6 +136,7 @@ public class WardenWinchSystem : MonoBehaviour
     private bool _connected;
     private Collider[] _playerColliders;
     private Collider[] _ignoredSurfaceColliders;
+    private Collider[] _grappledSurfaceColliders;
     private MaterialType _grappleSurfaceMaterial;
 
     /// <summary>若未在 Inspector 指派血量管理器，於執行時尋找（與 WardenController 一致）。</summary>
@@ -182,6 +190,12 @@ public class WardenWinchSystem : MonoBehaviour
 
         if (_connected && _joint != null)
             SyncJointToRopeLength();
+
+        if (_connected && Input.GetMouseButton(0))
+            ApplyReelInAcceleration();
+
+        if (_connected)
+            ResolveGrappledSurfacePenetration();
 
         ApplyAirMovement();
         ClampAirHorizontalSpeedIfNeeded();
@@ -238,6 +252,7 @@ public class WardenWinchSystem : MonoBehaviour
         if (Vector3.Distance(playerPos, anchorWorld) < minAttachDistanceFromPlayer)
             return;
 
+        CacheGrappledSurfaceColliders(hit.collider);
         BeginIgnoreGrappleCollider(hit.collider);
 
         float ropeLen = Vector3.Distance(winchExitPoint.position, anchorWorld);
@@ -292,7 +307,7 @@ public class WardenWinchSystem : MonoBehaviour
         _joint.enableCollision = true;
 
         float len = Mathf.Clamp(initialLength, minRopeLength, maxRopeLength);
-        _joint.minDistance = len;
+        _joint.minDistance = minRopeLength;
         _joint.maxDistance = len;
     }
 
@@ -313,7 +328,7 @@ public class WardenWinchSystem : MonoBehaviour
         _joint.anchor = _rb.transform.InverseTransformPoint(winchExitPoint.position);
         _joint.connectedAnchor = _anchorObject.transform.position;
         float len = Mathf.Clamp(_currentRopeLength, minRopeLength, maxRopeLength);
-        _joint.minDistance = len;
+        _joint.minDistance = minRopeLength;
         _joint.maxDistance = len;
     }
 
@@ -338,6 +353,7 @@ public class WardenWinchSystem : MonoBehaviour
 
         _connected = false;
         _grappleSurfaceMaterial = MaterialType.Concrete;
+        _grappledSurfaceColliders = null;
 
         if (lineRenderer != null)
             lineRenderer.enabled = false;
@@ -383,10 +399,100 @@ public class WardenWinchSystem : MonoBehaviour
         _rb.linearVelocity = new Vector3(horiz.x, v.y, horiz.z);
     }
 
-    /// <summary>錨點在命中點沿表面法線略外推，與命中面一致（含底面懸掛在命中點外側）。</summary>
+    /// <summary>錨點從命中點沿表面法線偏移；偏移為 0 時貼在命中點。</summary>
     private Vector3 ComputeAnchorWorldPosition(in RaycastHit hit)
     {
         return hit.point + hit.normal * anchorOffsetAlongHitNormal;
+    }
+
+    /// <summary>收繩時施加沿繩推進，加強「被拉向錨點」手感。</summary>
+    private void ApplyReelInAcceleration()
+    {
+        if (reelInAcceleration <= 0f || winchExitPoint == null || _anchorObject == null)
+            return;
+
+        Vector3 toAnchor = _anchorObject.transform.position - winchExitPoint.position;
+        float magSq = toAnchor.sqrMagnitude;
+        if (magSq < 1e-6f)
+            return;
+
+        Vector3 dir = toAnchor * (1f / Mathf.Sqrt(magSq));
+
+        if (reelInMaxSpeed > 0f)
+        {
+            float alongRopeSpeed = Vector3.Dot(_rb.linearVelocity, dir);
+            if (alongRopeSpeed >= reelInMaxSpeed)
+                return;
+        }
+
+        _rb.AddForce(dir * reelInAcceleration, ForceMode.Acceleration);
+    }
+
+    /// <summary>快取本次勾索目標的碰撞器，用於連線期間防止高速擺盪時穿透牆面。</summary>
+    private void CacheGrappledSurfaceColliders(Collider hitCollider)
+    {
+        if (hitCollider == null)
+        {
+            _grappledSurfaceColliders = null;
+            return;
+        }
+
+        PlatformType platformRoot = hitCollider.GetComponentInParent<PlatformType>();
+        Transform scope = platformRoot != null ? platformRoot.transform : hitCollider.transform;
+        _grappledSurfaceColliders = scope.GetComponentsInChildren<Collider>(true);
+    }
+
+    /// <summary>若玩家與被勾牆面重疊，立即去穿透並移除朝牆內的速度分量，降低高速穿牆。</summary>
+    private void ResolveGrappledSurfacePenetration()
+    {
+        if (_playerColliders == null || _grappledSurfaceColliders == null)
+            return;
+
+        Vector3 correction = Vector3.zero;
+
+        for (int i = 0; i < _playerColliders.Length; i++)
+        {
+            Collider playerCol = _playerColliders[i];
+            if (playerCol == null || playerCol.isTrigger || !playerCol.enabled)
+                continue;
+
+            for (int j = 0; j < _grappledSurfaceColliders.Length; j++)
+            {
+                Collider surfaceCol = _grappledSurfaceColliders[j];
+                if (surfaceCol == null || surfaceCol.isTrigger || !surfaceCol.enabled)
+                    continue;
+
+                if (!Physics.ComputePenetration(
+                        playerCol,
+                        playerCol.transform.position,
+                        playerCol.transform.rotation,
+                        surfaceCol,
+                        surfaceCol.transform.position,
+                        surfaceCol.transform.rotation,
+                        out Vector3 separationDir,
+                        out float separationDist))
+                {
+                    continue;
+                }
+
+                if (separationDist <= 0.0001f)
+                    continue;
+
+                Vector3 push = separationDir * (separationDist + 0.005f);
+                correction += push;
+            }
+        }
+
+        if (correction.sqrMagnitude <= 1e-8f)
+            return;
+
+        _rb.position += correction;
+
+        Vector3 correctionDir = correction.normalized;
+        Vector3 v = _rb.linearVelocity;
+        float inwardSpeed = Vector3.Dot(v, -correctionDir);
+        if (inwardSpeed > 0f)
+            _rb.linearVelocity = v + correctionDir * inwardSpeed;
     }
 
     private void BeginIgnoreGrappleCollider(Collider hitCollider)
@@ -589,6 +695,8 @@ public class WardenWinchSystem : MonoBehaviour
         fullRetractVelocityDecayPerSecond = Mathf.Max(0f, fullRetractVelocityDecayPerSecond);
         fullRetractSnapToRestSpeed = Mathf.Max(0f, fullRetractSnapToRestSpeed);
         anchorOffsetAlongHitNormal = Mathf.Max(0f, anchorOffsetAlongHitNormal);
+        reelInAcceleration = Mathf.Max(0f, reelInAcceleration);
+        reelInMaxSpeed = Mathf.Max(0f, reelInMaxSpeed);
         lavaGrappleDamagePerSecond = Mathf.Max(0f, lavaGrappleDamagePerSecond);
         iceGrappleHorizontalSlowdownPerSecond = Mathf.Max(0f, iceGrappleHorizontalSlowdownPerSecond);
     }

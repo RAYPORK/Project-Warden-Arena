@@ -13,11 +13,6 @@ public class WardenDeathManager : MonoBehaviour
     [SerializeField] private WardenController playerController;
     [SerializeField] private WardenWinchSystem winchSystem;
 
-    [Header("掉落虛空")]
-    [Tooltip("玩家世界 Y 低於此值判定掉落死亡。過於接近 0（例如 -20）時，略低於門檻即觸發；無限跑酷建議 -40～-80。")]
-    [SerializeField]
-    private float fallDeathY = -40f;
-
     [Header("結算 UI（Canvas Group，勿用 SetActive）")]
     [SerializeField] private CanvasGroup gameOverPanel;
 
@@ -106,11 +101,7 @@ public class WardenDeathManager : MonoBehaviour
 
     private void Update()
     {
-        if (_isDead || playerRespawnRoot == null)
-            return;
-
-        if (playerRespawnRoot.position.y < fallDeathY)
-            BeginDeathSequence();
+        // 下方掉落死亡邏輯已移除（封閉競技場不使用死亡邊界）。
     }
 
     private void OnDestroy()
