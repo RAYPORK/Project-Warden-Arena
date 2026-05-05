@@ -7132,7 +7132,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHeight: 45
-  deathManager: {fileID: 0}
+  deathManager: {fileID: 1661153067}
 --- !u!1 &1529318264
 GameObject:
   m_ObjectHideFlags: 0
@@ -8309,9 +8309,6 @@ MonoBehaviour:
   firingDuration: 2
   cooldownDuration: 3
   maxLaserLength: 80
-  wallLayerMask:
-    serializedVersion: 2
-    m_Bits: 0
   warningWidth: 0.1
   firingWidth: 5
   warningColor: {r: 1, g: 0, b: 0, a: 0.5882353}
