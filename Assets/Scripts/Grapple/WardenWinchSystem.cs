@@ -127,6 +127,8 @@ public class WardenWinchSystem : MonoBehaviour
     [SerializeField] private float bounceForce = 5f;
     [Tooltip("高速撞擊怪物後，該怪物在此秒數內不可再次被勾中。")]
     [SerializeField] private float monsterRegrappleCooldownSeconds = 0.2f;
+    [Tooltip("勾住怪物時的持續撞擊傷害最短間隔（秒），避免單幀重複觸發。")]
+    [SerializeField] private float connectedMonsterRamDamageInterval = 0.12f;
 
     [Header("繩索材質效果（連線中）")]
     [Tooltip("鋼索錨在岩漿表面時，每秒基準傷害（會乘上 FixedUpdate 步長後傳給下方事件）。")]
@@ -150,6 +152,8 @@ public class WardenWinchSystem : MonoBehaviour
     private bool _connected;
     private bool _skipSurfacePenetrationResolve;
     private MonsterBase _connectedMonster;
+    private Collider _connectedMonsterCollider;
+    private float _nextConnectedMonsterRamDamageTime;
     private MonsterBase _recentlyImpactDamagedMonster;
     private float _recentMonsterNoGrappleUntilTime;
     private Collider[] _playerColliders;
@@ -214,6 +218,8 @@ public class WardenWinchSystem : MonoBehaviour
 
         if (_connected && !_skipSurfacePenetrationResolve)
             ResolveGrappledSurfacePenetration();
+
+        TryApplyConnectedMonsterRamDamage();
 
         ApplyAirMovement();
         ClampAirHorizontalSpeedIfNeeded();
@@ -312,6 +318,7 @@ public class WardenWinchSystem : MonoBehaviour
         _connected = true;
         _grappleSurfaceMaterial = platform.type;
         _connectedMonster = hitMonster;
+        _connectedMonsterCollider = hit.collider;
 
         if (lineRenderer != null)
             lineRenderer.enabled = true;
@@ -420,6 +427,8 @@ public class WardenWinchSystem : MonoBehaviour
         _skipSurfacePenetrationResolve = false;
         _grappleSurfaceMaterial = MaterialType.Concrete;
         _connectedMonster = null;
+        _connectedMonsterCollider = null;
+        _nextConnectedMonsterRamDamageTime = 0f;
         _grappledSurfaceColliders = null;
 
         if (lineRenderer != null)
@@ -429,7 +438,7 @@ public class WardenWinchSystem : MonoBehaviour
         EndIgnoreGrappleCollider();
     }
 
-    /// <summary>高速撞擊怪物時造成傷害並彈開；低速碰觸則不處理，仍可正常勾索。</summary>
+    /// <summary>撞擊怪物時造成傷害：若目前正勾著該怪物則忽略速度門檻；否則維持高速撞擊才生效。</summary>
     private void OnCollisionEnter(Collision collision)
     {
         if (collision == null || collision.contactCount <= 0)
@@ -439,8 +448,9 @@ public class WardenWinchSystem : MonoBehaviour
         if (monster == null || monster.IsDead)
             return;
 
-        float speed = collision.relativeVelocity.magnitude;
-        if (speed <= attackSpeedThreshold)
+        bool isRammingConnectedMonster = _connected && _connectedMonster == monster;
+        float speed = isRammingConnectedMonster ? _rb.linearVelocity.magnitude : collision.relativeVelocity.magnitude;
+        if (!isRammingConnectedMonster && speed <= attackSpeedThreshold)
             return;
 
         Vector3 hitDirection = collision.relativeVelocity.sqrMagnitude > 1e-8f
@@ -455,6 +465,64 @@ public class WardenWinchSystem : MonoBehaviour
 
         if (_connected && _connectedMonster == monster)
             DisconnectGrapple();
+    }
+
+    /// <summary>勾住怪物時主動檢查重疊碰撞，避免某些情況下 OnCollisionEnter 未觸發而漏傷害。</summary>
+    private void TryApplyConnectedMonsterRamDamage()
+    {
+        if (!_connected || _connectedMonster == null || _connectedMonster.IsDead || _connectedMonsterCollider == null)
+            return;
+        if (Time.time < _nextConnectedMonsterRamDamageTime)
+            return;
+        if (_playerColliders == null)
+            return;
+
+        bool overlapping = false;
+        Vector3 hitNormal = Vector3.zero;
+        for (int i = 0; i < _playerColliders.Length; i++)
+        {
+            Collider playerCol = _playerColliders[i];
+            if (playerCol == null || playerCol.isTrigger || !playerCol.enabled)
+                continue;
+
+            if (!Physics.ComputePenetration(
+                    playerCol,
+                    playerCol.transform.position,
+                    playerCol.transform.rotation,
+                    _connectedMonsterCollider,
+                    _connectedMonsterCollider.transform.position,
+                    _connectedMonsterCollider.transform.rotation,
+                    out Vector3 dir,
+                    out float dist))
+            {
+                continue;
+            }
+
+            if (dist <= 0.0001f)
+                continue;
+
+            overlapping = true;
+            hitNormal = -dir;
+            break;
+        }
+
+        if (!overlapping)
+            return;
+
+        float speed = _rb.linearVelocity.magnitude;
+        float damage = minAttackDamage + speed * attackDamageMultiplier;
+        Vector3 hitDirection = _rb.linearVelocity.sqrMagnitude > 1e-8f
+            ? _rb.linearVelocity.normalized
+            : (hitNormal.sqrMagnitude > 1e-8f ? -hitNormal.normalized : transform.forward);
+        _connectedMonster.TakeDamage(damage, hitDirection);
+        _recentlyImpactDamagedMonster = _connectedMonster;
+        _recentMonsterNoGrappleUntilTime = Time.time + monsterRegrappleCooldownSeconds;
+        _nextConnectedMonsterRamDamageTime = Time.time + connectedMonsterRamDamageInterval;
+
+        if (hitNormal.sqrMagnitude > 1e-8f)
+            _rb.AddForce(-hitNormal.normalized * bounceForce, ForceMode.Impulse);
+
+        DisconnectGrapple();
     }
 
     /// <summary>連線在岩漿／冰上時的持續效果（之後若要改為「繩段掃過才觸發」可改寫此處）。</summary>
@@ -800,6 +868,7 @@ public class WardenWinchSystem : MonoBehaviour
         minAttackDamage = Mathf.Max(0f, minAttackDamage);
         bounceForce = Mathf.Max(0f, bounceForce);
         monsterRegrappleCooldownSeconds = Mathf.Max(0f, monsterRegrappleCooldownSeconds);
+        connectedMonsterRamDamageInterval = Mathf.Max(0.01f, connectedMonsterRamDamageInterval);
         lavaGrappleDamagePerSecond = Mathf.Max(0f, lavaGrappleDamagePerSecond);
         iceGrappleHorizontalSlowdownPerSecond = Mathf.Max(0f, iceGrappleHorizontalSlowdownPerSecond);
     }

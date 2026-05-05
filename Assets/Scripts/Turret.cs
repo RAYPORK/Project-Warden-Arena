@@ -1,10 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// 砲台：玩家進入偵測半徑時水平轉向玩家並依間隔發射飛彈（飛彈可追蹤玩家）；離開範圍則不發射並重置發射計時。
+/// 砲台：與玩家保持理想距離、持續朝向玩家，並依固定間隔發射飛彈（飛彈可追蹤玩家）。
 /// </summary>
 [DisallowMultipleComponent]
-public class Turret : MonoBehaviour
+public class Turret : MonsterBase
 {
     private const float UnarmedNextFire = -1f;
 
@@ -13,15 +13,10 @@ public class Turret : MonoBehaviour
     [SerializeField]
     private Transform playerTransform;
 
-    [Header("偵測")]
-    [Tooltip("與玩家距離小於等於此值時才轉向並允許發射（世界空間半徑）")]
-    [Range(5f, 50f)]
-    [SerializeField]
-    private float detectionRadius = 20f;
-
-    [Tooltip("紅色半透明偵測球；執行時自動建立")]
-    [SerializeField]
-    private GameObject detectionSphereVisual;
+    [Header("移動")]
+    [SerializeField] private float moveSpeed = 2f;
+    [SerializeField] private float idealDistance = 20f;
+    [SerializeField] private float distanceTolerance = 3f;
 
     [Header("發射")]
     [Tooltip("飛彈 Prefab（須掛 Missile 腳本）")]
@@ -41,22 +36,14 @@ public class Turret : MonoBehaviour
     [SerializeField]
     private Transform firePoint;
 
-    private Material _detectionSphereMaterial;
-
     /// <summary>
     /// 下一發允許發射的時間（<see cref="Time.time"/>）；為 <see cref="UnarmedNextFire"/> 表示未排程（玩家不在範圍內）。
     /// </summary>
     private float _nextFireTime = UnarmedNextFire;
 
-    private void Awake()
+    protected override void Awake()
     {
-        BuildDetectionSphereVisual();
-    }
-
-    private void OnDestroy()
-    {
-        if (_detectionSphereMaterial != null)
-            Destroy(_detectionSphereMaterial);
+        base.Awake();
     }
 
     private void Start()
@@ -66,8 +53,13 @@ public class Turret : MonoBehaviour
 
     private void Update()
     {
+        if (IsDead)
+        {
+            _nextFireTime = UnarmedNextFire;
+            return;
+        }
+
         EnsurePlayerReference();
-        RefreshDetectionSphereScale();
 
         if (playerTransform == null)
         {
@@ -75,27 +67,35 @@ public class Turret : MonoBehaviour
             return;
         }
 
-        float dist = Vector3.Distance(transform.position, playerTransform.position);
-        if (dist <= detectionRadius)
+        Vector3 toPlayer = playerTransform.position - transform.position;
+        toPlayer.y = 0f;
+        float dist = toPlayer.magnitude;
+
+        if (toPlayer.sqrMagnitude > 0.001f)
+            transform.rotation = Quaternion.LookRotation(toPlayer.normalized);
+
+        // 與玩家保持理想距離：太近後退、太遠靠近、誤差範圍內不動。
+        float nearThreshold = Mathf.Max(0f, idealDistance - distanceTolerance);
+        float farThreshold = idealDistance + Mathf.Max(0f, distanceTolerance);
+        if (dist < nearThreshold)
         {
-            Vector3 dir = playerTransform.position - transform.position;
-            dir.y = 0f;
-            if (dir.sqrMagnitude > 0.001f)
-                transform.rotation = Quaternion.LookRotation(dir);
-
-            if (_nextFireTime < 0f)
-                _nextFireTime = Time.time + Mathf.Max(0f, firstShotDelay);
-
-            if (Time.time >= _nextFireTime)
-            {
-                TryFire();
-                _nextFireTime = Time.time + Mathf.Max(0.01f, fireInterval);
-            }
+            Vector3 away = -toPlayer.normalized;
+            transform.position += away * moveSpeed * Time.deltaTime;
         }
-        else
+        else if (dist > farThreshold)
         {
-            // 玩家不在範圍內：不發射，發射計時重置（再次進入需重新經過 firstShotDelay）
-            _nextFireTime = UnarmedNextFire;
+            Vector3 toward = toPlayer.normalized;
+            transform.position += toward * moveSpeed * Time.deltaTime;
+        }
+
+        // 已移除「進入紅圈才發射」：只要有玩家目標就維持發射節奏。
+        if (_nextFireTime < 0f)
+            _nextFireTime = Time.time + Mathf.Max(0f, firstShotDelay);
+
+        if (Time.time >= _nextFireTime)
+        {
+            TryFire();
+            _nextFireTime = Time.time + Mathf.Max(0.01f, fireInterval);
         }
     }
 
@@ -129,62 +129,22 @@ public class Turret : MonoBehaviour
         missile.Launch(transform.forward, playerTransform);
     }
 
-    /// <summary>建立紅色半透明偵測球（無 Collider），邏輯與舊版 Missile 偵測視覺相同。</summary>
-    private void BuildDetectionSphereVisual()
+    /// <summary>死亡時停止發射流程並交由基底處理掉落與銷毀。</summary>
+    protected override void Die()
     {
-        if (detectionSphereVisual != null)
-            return;
-
-        detectionSphereVisual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        detectionSphereVisual.name = "DetectionSphereVisual";
-        Destroy(detectionSphereVisual.GetComponent<Collider>());
-        detectionSphereVisual.transform.SetParent(transform, false);
-        detectionSphereVisual.transform.localPosition = Vector3.zero;
-
-        Renderer renderer = detectionSphereVisual.GetComponent<Renderer>();
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                        ?? Shader.Find("Sprites/Default")
-                        ?? Shader.Find("Unlit/Color");
-
-        _detectionSphereMaterial = new Material(shader);
-        Color c = new Color(1f, 0f, 0f, 0.25f);
-        if (_detectionSphereMaterial.HasProperty("_BaseColor"))
-            _detectionSphereMaterial.SetColor("_BaseColor", c);
-        if (_detectionSphereMaterial.HasProperty("_Color"))
-            _detectionSphereMaterial.color = c;
-
-        if (_detectionSphereMaterial.HasProperty("_Surface"))
-        {
-            _detectionSphereMaterial.SetFloat("_Surface", 1f);
-            _detectionSphereMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            _detectionSphereMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            _detectionSphereMaterial.SetInt("_ZWrite", 0);
-            _detectionSphereMaterial.renderQueue = 3000;
-            _detectionSphereMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            _detectionSphereMaterial.DisableKeyword("_SURFACE_TYPE_OPAQUE");
-        }
-
-        renderer.sharedMaterial = _detectionSphereMaterial;
-        RefreshDetectionSphereScale();
-    }
-
-    private void RefreshDetectionSphereScale()
-    {
-        if (detectionSphereVisual == null)
-            return;
-
-        float r = Mathf.Max(0.01f, detectionRadius);
-        float uniformScale = r / 0.5f;
-        detectionSphereVisual.transform.localScale = Vector3.one * uniformScale;
+        _nextFireTime = UnarmedNextFire;
+        base.Die();
     }
 
 #if UNITY_EDITOR
-    private void OnValidate()
+    protected override void OnValidate()
     {
+        base.OnValidate();
         fireInterval = Mathf.Clamp(fireInterval, 1f, 10f);
         firstShotDelay = Mathf.Max(0f, firstShotDelay);
-        detectionRadius = Mathf.Clamp(detectionRadius, 5f, 50f);
-        RefreshDetectionSphereScale();
+        moveSpeed = Mathf.Max(0f, moveSpeed);
+        idealDistance = Mathf.Max(0f, idealDistance);
+        distanceTolerance = Mathf.Max(0f, distanceTolerance);
     }
 #endif
 }
