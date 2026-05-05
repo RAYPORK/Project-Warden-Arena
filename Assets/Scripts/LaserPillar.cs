@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// 雷射柱：開局隨機選擇六向之一發射軸（未由外部覆寫時），循環「冷卻 → 預警（細紅線）→ 發射（粗白線）」；
-/// 長度預設為 <see cref="maxLaserLength"/>；由 <see cref="WardenRoomGenerator"/> 生成時會呼叫 <see cref="SetDirectionAndLength"/> 指定方向與長度。
+/// 長度預設為 <see cref="maxLaserLength"/>；外部可呼叫 <see cref="SetDirectionAndLength"/> 指定方向與長度。
 /// 發射期間以膠囊體積與玩家重疊時觸發 <see cref="WardenDeathManager.BeginDeathSequence"/>（無敵時略過）。
 /// </summary>
 [DisallowMultipleComponent]
@@ -45,7 +45,7 @@ public class LaserPillar : MonoBehaviour
     private float cooldownDuration = 2f;
 
     [Header("雷射幾何")]
-    [Tooltip("Awake 時預設雷射長度（公尺）；若由 WardenRoomGenerator 生成會改以 SetDirectionAndLength 覆寫）")]
+    [Tooltip("Awake 時預設雷射長度（公尺）；可由 SetDirectionAndLength 覆寫）")]
     [SerializeField]
     private float maxLaserLength = 80f;
 

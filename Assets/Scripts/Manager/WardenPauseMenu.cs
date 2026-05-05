@@ -6,7 +6,7 @@ using UnityEngine.UI;
 /// <summary>
 /// 遊戲內暫停選單：ESC 開關面板；調整 SFX／BGM／滑鼠靈敏度；繼續或返回主選單。
 /// 「繼續／主選單」請於各 Button 的 Inspector → OnClick 綁定本元件的 <see cref="Resume"/>、<see cref="ReturnToMainMenu"/>（勿在程式內 AddListener）。
-/// 死亡或任務完成面板顯示期間不處理暫停。
+/// 死亡結算顯示期間不處理暫停。
 /// </summary>
 public class WardenPauseMenu : MonoBehaviour
 {
@@ -55,17 +55,12 @@ public class WardenPauseMenu : MonoBehaviour
     [SerializeField]
     private WardenDeathManager deathManager;
 
-    [SerializeField]
-    private WardenMissionCompleteUI missionCompleteUI;
-
     private bool _menuPauseActive;
 
     private void Awake()
     {
         if (deathManager == null)
             deathManager = Object.FindFirstObjectByType<WardenDeathManager>();
-        if (missionCompleteUI == null)
-            missionCompleteUI = Object.FindFirstObjectByType<WardenMissionCompleteUI>();
 
         InitializeSlidersFromPlayerPrefs();
 
@@ -93,17 +88,13 @@ public class WardenPauseMenu : MonoBehaviour
         TogglePause();
     }
 
-    /// <summary>死亡中、或任務完成面板阻擋時，不處理 ESC（亦不開暫停）。</summary>
+    /// <summary>死亡結算中時，不處理 ESC（亦不開暫停）。</summary>
     private bool ShouldIgnoreEscapeForBlockingPanels()
     {
-        if (deathManager != null && deathManager.isDead)
-            return true;
-        if (missionCompleteUI != null && missionCompleteUI.IsMissionCompletePanelVisible)
-            return true;
-        return false;
+        return deathManager != null && deathManager.isDead;
     }
 
-    /// <summary>是否不允許「開啟」暫停（死亡或任務完成中）。</summary>
+    /// <summary>是否不允許「開啟」暫停（死亡結算中）。</summary>
     private bool CannotOpenPauseMenu()
     {
         return ShouldIgnoreEscapeForBlockingPanels();

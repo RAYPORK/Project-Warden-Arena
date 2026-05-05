@@ -137,29 +137,12 @@ public class WardenController : MonoBehaviour
         ApplyGroundHorizontalBrakingWhenNoInput();
     }
 
-    /// <summary>
-    /// 讀取 <see cref="CollapsiblePlatform.CurrentShakeIntensity"/>，在滑鼠視角之後對主鏡頭施加碎裂倒數震動；
-    /// 強度為 0 時將局部座標還原為 Awake 快取之基準，避免位移累積漂移。
-    /// </summary>
+    /// <summary>視角更新後將主鏡頭局部位置還原為 Awake 快取基準，避免位移累積漂移。</summary>
     private void LateUpdate()
-    {
-        ApplyCollapsibleCameraShake();
-    }
-
-    private void ApplyCollapsibleCameraShake()
     {
         if (mainCamera == null)
             return;
-
-        float s = CollapsiblePlatform.CurrentShakeIntensity;
-        if (s <= 0f)
-        {
-            mainCamera.transform.localPosition = _cameraBaseLocalPosition;
-            return;
-        }
-
-        mainCamera.transform.localPosition +=
-            Random.insideUnitSphere * (s * Time.deltaTime * 10f);
+        mainCamera.transform.localPosition = _cameraBaseLocalPosition;
     }
 
     /// <summary>

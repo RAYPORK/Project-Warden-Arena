@@ -243,13 +243,7 @@ public class WardenWinchSystem : MonoBehaviour
         float ropeLen = Vector3.Distance(winchExitPoint.position, anchorWorld);
         ropeLen = Mathf.Clamp(ropeLen, minRopeLength, maxRopeLength);
 
-        // 將 Anchor 掛在命中碰撞器下，斷線時可自父層取得 CollapsiblePlatform；移動平台時錨點隨表面移動。
         CreateAnchor(anchorWorld, hit.collider.transform);
-
-        // 碎裂平台：成功建立 Anchor 後開始倒數（已倒數中再次勾住不會重置，見 CollapsiblePlatform）。
-        CollapsiblePlatform collapsible = hit.collider.GetComponentInParent<CollapsiblePlatform>();
-        if (collapsible != null)
-            collapsible.OnGrappleAttached();
 
         AttachSpringJoint(ropeLen);
         _currentRopeLength = ropeLen;
@@ -338,11 +332,6 @@ public class WardenWinchSystem : MonoBehaviour
 
         if (_anchorObject != null)
         {
-            // 碎裂平台：切斷鋼索時停止倒數並還原外觀（須在銷毀 Anchor 前自父層查組件）。
-            CollapsiblePlatform collapsible = _anchorObject.GetComponentInParent<CollapsiblePlatform>();
-            if (collapsible != null)
-                collapsible.OnGrappleDetached();
-
             Destroy(_anchorObject);
             _anchorObject = null;
         }

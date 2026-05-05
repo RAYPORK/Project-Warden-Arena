@@ -4,28 +4,14 @@ using UnityEngine;
 
 /// <summary>
 /// 死亡與重開：玩家 Y 低於門檻（掉落虛空）時凍結輸入、淡入結算面板；
-/// 再試一次時重產地圖（新種子）、補滿能量並重置統計與拉霸狀態。
-/// 統計建議綁定：<see cref="WardenSlotSystem"/> 的 onReelDisplaySpinStart → <see cref="RegisterSlotSpin"/>；
-/// 各 <see cref="WardenEnergyPickup"/> 的 onCollected → <see cref="RegisterEnergyCollected"/>。
-/// 執行順序晚於 <see cref="WardenDistanceTracker"/>（-100），讓距離先於同一幀的死亡判定更新。
+/// 再試一次時重置統計與玩家狀態。
 /// </summary>
 [DefaultExecutionOrder(50)]
 public class WardenDeathManager : MonoBehaviour
 {
     [Header("核心參照")]
-    [SerializeField] private WardenEnergyManager energyManager;
     [SerializeField] private WardenController playerController;
     [SerializeField] private WardenWinchSystem winchSystem;
-    [SerializeField] private WardenRoomGenerator roomGenerator;
-    [SerializeField] private WardenSlotSystem slotSystem;
-
-    [Tooltip("最遠 Z 追蹤：死亡時停止、重開時重新 StartTracking")]
-    [SerializeField]
-    private WardenDistanceTracker distanceTracker;
-
-    [Tooltip("大獎／過載倒數 HUD；死亡時停止倒數，重開時清空顯示")]
-    [SerializeField]
-    private WardenBuffTimerHUD buffTimerHUD;
 
     [Header("掉落虛空")]
     [Tooltip("玩家世界 Y 低於此值判定掉落死亡。過於接近 0（例如 -20）時，略低於門檻即觸發；無限跑酷建議 -40～-80。")]
@@ -133,7 +119,7 @@ public class WardenDeathManager : MonoBehaviour
             tryAgainButton.onClick.RemoveListener(OnDeathTryAgainClicked);
     }
 
-    /// <summary>綁定 <see cref="WardenSlotSystem.onReelDisplaySpinStart"/>（無參數 UnityEvent）。</summary>
+    /// <summary>拉霸轉動次數統計（可由 UnityEvent 綁定）。</summary>
     public void RegisterSlotSpin()
     {
         if (_isDead)
@@ -141,7 +127,7 @@ public class WardenDeathManager : MonoBehaviour
         _slotSpinCount++;
     }
 
-    /// <summary>綁定 <see cref="WardenEnergyPickup.onCollected"/>（float 能量量）。</summary>
+    /// <summary>收集能量統計（可由 UnityEvent 綁定）。</summary>
     public void RegisterEnergyCollected(float amount)
     {
         if (_isDead)
@@ -155,22 +141,12 @@ public class WardenDeathManager : MonoBehaviour
     {
         _isDead = true;
 
-        // 停止大獎／過載共用倒數協程並清空文字，避免結算期間仍閃爍或疊字。
-        if (buffTimerHUD != null)
-            buffTimerHUD.StopAllTimers();
-
-        if (distanceTracker != null)
-            distanceTracker.StopTracking();
-
         // 死亡時解鎖游標讓玩家能點擊 UI
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
         float survivedSeconds = Mathf.Max(0f, Time.time - _sessionStartTime);
         PopulateResultTexts(survivedSeconds);
-
-        if (slotSystem != null)
-            slotSystem.HaltActiveSlotCoroutines();
 
         if (playerController != null)
             playerController.enabled = false;
@@ -198,12 +174,8 @@ public class WardenDeathManager : MonoBehaviour
         if (energyCollectedText != null)
             energyCollectedText.text = $"ENERGY: {Mathf.FloorToInt(_energyCollectedTotal)}";
 
-        // 本局最遠 Z（公尺）：於 BeginDeathSequence 內 StopTracking 之前已寫入 tracker，此處僅讀取顯示。
-        if (distanceText != null && distanceTracker != null)
-        {
-            int dist = Mathf.FloorToInt(distanceTracker.GetCurrentDistance());
-            distanceText.text = $"DISTANCE: {dist}m";
-        }
+        if (distanceText != null)
+            distanceText.text = "DISTANCE: --";
     }
 
     private IEnumerator FadeInGameOverPanel()
@@ -259,23 +231,10 @@ public class WardenDeathManager : MonoBehaviour
             }
         }
 
-        if (roomGenerator != null)
-            roomGenerator.GenerateMap();
-
-        if (energyManager != null)
-            energyManager.RestoreFullEnergy();
-
-        // 重開時補滿血量（與能量補滿同一步驟；Unity 6 使用 FindFirstObjectByType）
+        // 重開時補滿血量（Unity 6 使用 FindFirstObjectByType）
         WardenHealthManager healthManager = Object.FindFirstObjectByType<WardenHealthManager>();
         if (healthManager != null)
             healthManager.RestoreFullHealth();
-
-        if (slotSystem != null)
-            slotSystem.ResetForNewRun();
-
-        // 與 StopAllTimers 等價：確保 buff 倒數 TMP 清空、協程已停（新一局乾淨狀態）。
-        if (buffTimerHUD != null)
-            buffTimerHUD.ResetHUD();
 
         if (winchSystem != null)
             winchSystem.ForceDisconnectIfConnected();
@@ -299,9 +258,6 @@ public class WardenDeathManager : MonoBehaviour
         _energyCollectedTotal = 0f;
         _sessionStartTime = Time.time;
         _isDead = false;
-
-        if (distanceTracker != null)
-            distanceTracker.StartTracking();
 
         ResetHudStatTextsToAsciiPlaceholders();
 
