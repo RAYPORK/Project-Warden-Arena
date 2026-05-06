@@ -170,11 +170,24 @@ public class PlayerStats : MonoBehaviour
     /// <summary>冷卻加成；負值縮短冷卻。</summary>
     public void AddBonusGrappleCooldown(float amount) => bonusGrappleCooldown += amount;
 
+    public void AddBonusMeleeDamage(float amount) => bonusMeleeDamage += amount;
+
+    public void AddBonusRangedDamage(float amount) => bonusRangedDamage += amount;
+
     /// <summary>乘上傷害倍率（肉鴿「傷害 +X%」類可呼叫）。</summary>
     public void MultiplyDamage(float multiplier) => damageMultiplier *= multiplier;
 
     /// <summary>乘上移速倍率。</summary>
     public void MultiplyMoveSpeed(float multiplier) => moveSpeedMultiplier *= multiplier;
+
+    /// <summary>乘上鉤索距離倍率。</summary>
+    public void MultiplyGrappleRange(float multiplier) => grappleRangeMultiplier *= multiplier;
+
+    /// <summary>乘上近戰額外傷害段倍率。</summary>
+    public void MultiplyMeleeDamage(float multiplier) => meleeDamageMultiplier *= multiplier;
+
+    /// <summary>乘上遠距額外傷害段倍率。</summary>
+    public void MultiplyRangedDamage(float multiplier) => rangedDamageMultiplier *= multiplier;
 
     /// <summary>新局開始時重置所有加成與倍率係數（基礎值不變）。</summary>
     public void ResetBonuses()

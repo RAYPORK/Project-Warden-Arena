@@ -55,6 +55,11 @@ public class WardenPauseMenu : MonoBehaviour
     [SerializeField]
     private WardenDeathManager deathManager;
 
+    [Header("能力選擇")]
+    [Tooltip("與 AbilitySelectionUI 的選擇面板為同一個根物件；顯示中時按 ESC 不開暫停選單")]
+    [SerializeField]
+    private GameObject abilitySelectionPanel;
+
     private bool _menuPauseActive;
 
     private void Awake()
@@ -79,6 +84,10 @@ public class WardenPauseMenu : MonoBehaviour
 
     private void Update()
     {
+        // 能力三選一顯示中：不處理暫停（避免與選卡操作衝突）
+        if (abilitySelectionPanel != null && abilitySelectionPanel.activeSelf)
+            return;
+
         if (!Input.GetKeyDown(KeyCode.Escape))
             return;
 
